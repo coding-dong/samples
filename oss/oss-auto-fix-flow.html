@@ -183,10 +183,10 @@
         <text x="690" y="190" text-anchor="middle" fill="#e8edf2" font-size="15">Jenkins "OSS repair" job</text>
         <text x="690" y="210" text-anchor="middle" fill="#9fb0c3" font-size="13">dedupe &middot; sort minor / major</text>
 
-        <!-- major -> SCB Dev -->
+        <!-- major -> Dev -->
         <line x1="820" y1="196" x2="865" y2="196" stroke="#fc6255" stroke-width="2" marker-end="url(#arrow-red)"/>
         <rect x="868" y="164" width="112" height="64" rx="10" fill="#0b0f14" stroke="#fc6255" stroke-width="2"/>
-        <text x="924" y="190" text-anchor="middle" fill="#e8edf2" font-size="15">SCB Dev</text>
+        <text x="924" y="190" text-anchor="middle" fill="#e8edf2" font-size="15">Dev</text>
         <text x="924" y="210" text-anchor="middle" fill="#9fb0c3" font-size="12">major / no fix</text>
 
         <!-- minor -> left to Pi agent -->
@@ -250,7 +250,7 @@
       <span class="l-blue">Automated step</span>
       <span class="l-yellow">Decision or agent</span>
       <span class="l-green">Success exit</span>
-      <span class="l-red">Exit to SCB Dev</span>
+      <span class="l-red">Exit to Dev</span>
     </div>
   </div>
 
@@ -359,7 +359,7 @@
     <ul>
       <li>Permit minor upgrades only. Check the version before the pull request opens.</li>
       <li>Permit changes to the pom files and to new test files only.</li>
-      <li>Both test runs must pass. A failed "before" run goes to SCB Dev.</li>
+      <li>Both test runs must pass. A failed "before" run goes to Dev.</li>
       <li>Rebase the branch when the release branch moves.</li>
     </ul>
   </div>
@@ -410,8 +410,8 @@
     <ol start="16">
       <li>The job reads each finding in the Nexus report.</li>
       <li>The job compares the current version and the recommended version.</li>
-      <li>If the recommended version is a major upgrade, the job sends the finding to SCB Dev. SCB Dev uses the current manual flow. <span class="branch stop">exit: SCB Dev</span></li>
-      <li>If Nexus does not give a clean version, the job sends the finding to SCB Dev. <span class="branch stop">exit: SCB Dev</span></li>
+      <li>If the recommended version is a major upgrade, the job sends the finding to Dev. Dev uses the current manual flow. <span class="branch stop">exit: Dev</span></li>
+      <li>If Nexus does not give a clean version, the job sends the finding to Dev. <span class="branch stop">exit: Dev</span></li>
       <li>If the recommended version is a minor upgrade, the job gives the finding to the Pi agent.</li>
     </ol>
   </section>
@@ -436,7 +436,7 @@
       <li>If tests exist, the Pi agent uses those tests.</li>
       <li>If no tests exist, the Pi agent writes characterization tests for the listed classes. The tests record the current behavior.</li>
       <li>The Pi agent runs the tests on the current jar version.</li>
-      <li>If a test fails on the current version, the Pi agent stops for that finding. It sends the finding and the test to SCB Dev. A failed baseline is not valid evidence. <span class="branch stop">exit: SCB Dev</span></li>
+      <li>If a test fails on the current version, the Pi agent stops for that finding. It sends the finding and the test to Dev. A failed baseline is not valid evidence. <span class="branch stop">exit: Dev</span></li>
       <li>If all tests pass, the Pi agent saves the test report as "before".</li>
     </ol>
   </section>
@@ -449,7 +449,7 @@
       <li>The Pi agent compiles the code.</li>
       <li>The Pi agent runs the full unit test suite, the integration tests, and the new tests.</li>
       <li>The Pi agent saves the test report as "after".</li>
-      <li>If the compile or a test fails, the Pi agent removes that component from the pull request. It sends the finding, the error, and the reports to SCB Dev. <span class="branch stop">exit: SCB Dev</span></li>
+      <li>If the compile or a test fails, the Pi agent removes that component from the pull request. It sends the finding, the error, and the reports to Dev. <span class="branch stop">exit: Dev</span></li>
     </ol>
   </section>
 
@@ -490,7 +490,7 @@
   </section>
 
   <!-- ============ EXITS ============ -->
-  <h2>Exits to SCB Dev</h2>
+  <h2>Exits to Dev</h2>
   <div class="grid">
     <div class="card red"><h3>Major upgrade</h3><p class="muted">Step 18. The recommended version is a major version. The current manual flow applies.</p></div>
     <div class="card red"><h3>No clean version</h3><p class="muted">Step 19. Nexus does not give a version with zero vulnerabilities.</p></div>
