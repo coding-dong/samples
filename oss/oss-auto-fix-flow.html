@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automated repair of minor OSS vulnerabilities</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --bg-2: #111821;
+    --panel: #141c27;
+    --line: #243244;
+    --text: #e8edf2;
+    --muted: #9fb0c3;
+    --blue: #58c4dd;
+    --blue-d: #29abca;
+    --yellow: #ffd54a;
+    --teal: #5cd0b3;
+    --green: #83c167;
+    --red: #fc6255;
+    --gold: #f0ac5f;
+    --purple: #9a72ac;
+    --serif: "Latin Modern Roman", "CMU Serif", "Computer Modern", Georgia, "Times New Roman", serif;
+    --sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 50% -10%, #142033 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 400; letter-spacing: 0.2px; }
+  h1 { font-size: 44px; line-height: 1.15; margin: 0 0 8px; }
+  h1 .accent { color: var(--yellow); }
+  h2 { font-size: 30px; margin: 72px 0 18px; color: var(--blue); }
+  h3 { font-size: 22px; margin: 28px 0 10px; color: var(--text); }
+  .subtitle { color: var(--muted); font-size: 19px; margin: 0 0 32px; }
+  .eyebrow {
+    display: inline-block; font-family: var(--mono); font-size: 12px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--teal); border: 1px solid var(--line);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 18px;
+  }
+  p { margin: 0 0 14px; }
+  .muted { color: var(--muted); }
+  code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-2); padding: 2px 6px; border-radius: 4px; color: var(--gold); }
+
+  /* Diagram */
+  .diagram {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 24px; margin: 24px 0 8px; overflow-x: auto;
+  }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 10px; }
+  .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+  .legend .l-blue::before { background: var(--blue); }
+  .legend .l-yellow::before { background: var(--yellow); }
+  .legend .l-green::before { background: var(--green); }
+  .legend .l-red::before { background: var(--red); }
+
+  /* Cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; margin: 20px 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 22px 16px;
+    position: relative; overflow: hidden;
+  }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--blue); }
+  .card.yellow::before { background: var(--yellow); }
+  .card.red::before { background: var(--red); }
+  .card.green::before { background: var(--green); }
+  .card.purple::before { background: var(--purple); }
+  .card h3 { margin-top: 0; font-size: 21px; }
+  .card ul { padding-left: 20px; margin: 8px 0 0; }
+  .card li { margin: 6px 0; }
+  .verdict { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); font-family: var(--mono); font-size: 13.5px; }
+  .verdict.no { color: var(--red); }
+  .verdict.yes { color: var(--green); }
+
+  /* Comparison table */
+  table { width: 100%; border-collapse: collapse; margin: 22px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-size: 15.5px; }
+  th { font-family: var(--mono); font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); background: var(--bg-2); }
+  td:first-child { color: var(--text); font-weight: 500; }
+  .ok { color: var(--green); } .no { color: var(--red); } .part { color: var(--gold); }
+
+  /* Timeline */
+  .stage { position: relative; padding: 0 0 36px 64px; }
+  .stage::before { content: ""; position: absolute; left: 21px; top: 46px; bottom: 0; width: 2px; background: linear-gradient(var(--blue-d), var(--line)); }
+  .stage:last-of-type::before { display: none; }
+  .stage .num {
+    position: absolute; left: 0; top: 2px; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--blue); color: var(--blue);
+    display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 20px;
+  }
+  .stage.yellow .num { border-color: var(--yellow); color: var(--yellow); }
+  .stage.green .num { border-color: var(--green); color: var(--green); }
+  .stage h3 { margin: 6px 0 12px; }
+  .stage ol { margin: 0; padding-left: 22px; counter-reset: none; }
+  .stage ol li { margin: 7px 0; padding-left: 4px; }
+  .stage ol li::marker { color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  .branch { display: inline-block; font-family: var(--mono); font-size: 12.5px; padding: 2px 8px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
+  .branch.stop { background: rgba(252,98,85,0.14); color: var(--red); border: 1px solid rgba(252,98,85,0.35); }
+  .branch.go { background: rgba(131,193,103,0.14); color: var(--green); border: 1px solid rgba(131,193,103,0.35); }
+  .branch.note { background: rgba(255,213,74,0.12); color: var(--yellow); border: 1px solid rgba(255,213,74,0.35); }
+
+  .callout { background: var(--bg-2); border: 1px solid var(--line); border-left: 4px solid var(--yellow); border-radius: 12px; padding: 18px 22px; margin: 26px 0; }
+  .callout h3 { margin: 0 0 8px; color: var(--yellow); }
+  footer { margin-top: 72px; color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 18px; font-family: var(--mono); }
+
+  @media print {
+    body { background: #fff; color: #111; }
+    .card, .diagram, table, .callout { background: #fff; border-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <span class="eyebrow">Product Review Framework &middot; Business Case</span>
+  <h1>Automated repair of <span class="accent">minor OSS vulnerabilities</span></h1>
+  <p class="subtitle">From a code commit to a merged fix. Nexus IQ finds the vulnerability. Jenkins controls the flow. A Pi agent writes the tests and the fix. A person only reviews the evidence.</p>
+
+  <!-- ============ OVERVIEW DIAGRAM ============ -->
+  <div class="diagram" aria-label="Flow diagram">
+    <svg viewBox="0 0 1000 420" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#58c4dd"/>
+        </marker>
+        <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#fc6255"/>
+        </marker>
+        <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#83c167"/>
+        </marker>
+      </defs>
+
+      <!-- Row 1: commit -> build -> scan -> decision -->
+      <g>
+        <rect x="20" y="40" width="150" height="64" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="95" y="66" text-anchor="middle" fill="#e8edf2" font-size="15">Developer</text>
+        <text x="95" y="86" text-anchor="middle" fill="#9fb0c3" font-size="13">commit to Gitea</text>
+
+        <line x1="170" y1="72" x2="215" y2="72" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="218" y="40" width="150" height="64" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="293" y="66" text-anchor="middle" fill="#e8edf2" font-size="15">Jenkins build</text>
+        <text x="293" y="86" text-anchor="middle" fill="#9fb0c3" font-size="13">compile + unit tests</text>
+
+        <line x1="368" y1="72" x2="413" y2="72" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="416" y="40" width="150" height="64" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="491" y="66" text-anchor="middle" fill="#e8edf2" font-size="15">Nexus IQ scan</text>
+        <text x="491" y="86" text-anchor="middle" fill="#9fb0c3" font-size="13">policy evaluation</text>
+
+        <line x1="566" y1="72" x2="611" y2="72" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- decision diamond -->
+        <polygon points="690,30 770,72 690,114 610,72" fill="#0b0f14" stroke="#ffd54a" stroke-width="2"/>
+        <text x="690" y="68" text-anchor="middle" fill="#ffd54a" font-size="14">violation?</text>
+        <text x="690" y="86" text-anchor="middle" fill="#9fb0c3" font-size="12">per component</text>
+
+        <!-- no -> build success -->
+        <line x1="770" y1="72" x2="835" y2="72" stroke="#83c167" stroke-width="2" marker-end="url(#arrow-green)"/>
+        <text x="800" y="62" text-anchor="middle" fill="#83c167" font-size="12">no</text>
+        <rect x="838" y="40" width="142" height="64" rx="10" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+        <text x="909" y="66" text-anchor="middle" fill="#e8edf2" font-size="15">Build green</text>
+        <text x="909" y="86" text-anchor="middle" fill="#9fb0c3" font-size="13">flow stops</text>
+
+        <!-- yes -> down -->
+        <line x1="690" y1="114" x2="690" y2="160" stroke="#fc6255" stroke-width="2" marker-end="url(#arrow-red)"/>
+        <text x="708" y="142" fill="#fc6255" font-size="12">yes, build red</text>
+      </g>
+
+      <!-- Row 2: repair job + sort -->
+      <g>
+        <rect x="560" y="164" width="260" height="64" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="690" y="190" text-anchor="middle" fill="#e8edf2" font-size="15">Jenkins "OSS repair" job</text>
+        <text x="690" y="210" text-anchor="middle" fill="#9fb0c3" font-size="13">dedupe &middot; sort minor / major</text>
+
+        <!-- major -> Dev -->
+        <line x1="820" y1="196" x2="865" y2="196" stroke="#fc6255" stroke-width="2" marker-end="url(#arrow-red)"/>
+        <rect x="868" y="164" width="112" height="64" rx="10" fill="#0b0f14" stroke="#fc6255" stroke-width="2"/>
+        <text x="924" y="190" text-anchor="middle" fill="#e8edf2" font-size="15">Dev</text>
+        <text x="924" y="210" text-anchor="middle" fill="#9fb0c3" font-size="12">major / no fix</text>
+
+        <!-- minor -> left to Pi agent -->
+        <line x1="560" y1="196" x2="515" y2="196" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="537" y="186" text-anchor="middle" fill="#58c4dd" font-size="12">minor</text>
+      </g>
+
+      <!-- Row 2 left: Pi agent block -->
+      <g>
+        <rect x="20" y="150" width="492" height="150" rx="12" fill="#0f1620" stroke="#ffd54a" stroke-width="2"/>
+        <text x="36" y="176" fill="#ffd54a" font-size="14" font-family="JetBrains Mono, Menlo, monospace">PI AGENT</text>
+
+        <rect x="36" y="190" width="140" height="48" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+        <text x="106" y="210" text-anchor="middle" fill="#e8edf2" font-size="13">find pom + callers</text>
+        <text x="106" y="227" text-anchor="middle" fill="#9fb0c3" font-size="11.5">reachability</text>
+
+        <line x1="176" y1="214" x2="196" y2="214" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="198" y="190" width="140" height="48" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+        <text x="268" y="210" text-anchor="middle" fill="#e8edf2" font-size="13">write tests if none</text>
+        <text x="268" y="227" text-anchor="middle" fill="#9fb0c3" font-size="11.5">run on current jar</text>
+
+        <line x1="338" y1="214" x2="358" y2="214" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="360" y="190" width="140" height="48" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+        <text x="430" y="210" text-anchor="middle" fill="#e8edf2" font-size="13">upgrade pom</text>
+        <text x="430" y="227" text-anchor="middle" fill="#9fb0c3" font-size="11.5">run tests again</text>
+
+        <text x="36" y="282" fill="#9fb0c3" font-size="12.5">Evidence: "before" report on the current jar + "after" report on the new jar.</text>
+      </g>
+
+      <!-- down from Pi agent to PR -->
+      <line x1="266" y1="300" x2="266" y2="340" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Row 3: PR -> Jenkins verify -> review/merge -> build green -->
+      <g>
+        <rect x="20" y="344" width="200" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="120" y="368" text-anchor="middle" fill="#e8edf2" font-size="15">Pull request on Gitea</text>
+        <text x="120" y="388" text-anchor="middle" fill="#9fb0c3" font-size="12.5">pom + tests + both reports</text>
+
+        <line x1="220" y1="374" x2="265" y2="374" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="268" y="344" width="200" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="368" y="368" text-anchor="middle" fill="#e8edf2" font-size="15">Jenkins PR build</text>
+        <text x="368" y="388" text-anchor="middle" fill="#9fb0c3" font-size="12.5">tests + Nexus scan again</text>
+
+        <line x1="468" y1="374" x2="513" y2="374" stroke="#58c4dd" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="516" y="344" width="200" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+        <text x="616" y="368" text-anchor="middle" fill="#e8edf2" font-size="15">Review and merge</text>
+        <text x="616" y="388" text-anchor="middle" fill="#9fb0c3" font-size="12.5">reviewer reads evidence only</text>
+
+        <line x1="716" y1="374" x2="761" y2="374" stroke="#83c167" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+        <rect x="764" y="344" width="216" height="60" rx="10" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+        <text x="872" y="368" text-anchor="middle" fill="#e8edf2" font-size="15">Release branch green</text>
+        <text x="872" y="388" text-anchor="middle" fill="#9fb0c3" font-size="12.5">Nexus scan passes</text>
+      </g>
+    </svg>
+    <div class="legend">
+      <span class="l-blue">Automated step</span>
+      <span class="l-yellow">Decision or agent</span>
+      <span class="l-green">Success exit</span>
+      <span class="l-red">Exit to Dev</span>
+    </div>
+  </div>
+
+  <!-- ============ WHY NOT THE BOTS ============ -->
+  <h2>Why the flow does not use Dependabot or Renovate</h2>
+  <p>Dependabot and Renovate are good tools for one task. They change a version number and open a pull request. This flow needs four more tasks. The bots cannot do those tasks. The table shows the comparison.</p>
+
+  <table>
+    <thead>
+      <tr><th>Requirement</th><th>Dependabot</th><th>Renovate</th><th>Pi agent</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Use the Nexus IQ report as the only input</td>
+        <td class="no">No. It uses GitHub advisories.</td>
+        <td class="part">Partial. Custom rules for each library on each run.</td>
+        <td class="ok">Yes. It reads the report from the failed build.</td>
+      </tr>
+      <tr>
+        <td>Select the version that Nexus recommends</td>
+        <td class="no">No. It selects from the registry.</td>
+        <td class="part">Partial. Possible with pinned package rules.</td>
+        <td class="ok">Yes.</td>
+      </tr>
+      <tr>
+        <td>Find the classes that call the vulnerable jar</td>
+        <td class="no">No.</td>
+        <td class="no">No.</td>
+        <td class="ok">Yes. It searches the source code.</td>
+      </tr>
+      <tr>
+        <td>Write JUnit and integration tests for code that has no tests</td>
+        <td class="no">No.</td>
+        <td class="no">No.</td>
+        <td class="ok">Yes.</td>
+      </tr>
+      <tr>
+        <td>Run the tests on the current jar before the upgrade</td>
+        <td class="no">No.</td>
+        <td class="no">No.</td>
+        <td class="ok">Yes. This gives the "before" report.</td>
+      </tr>
+      <tr>
+        <td>Put the tests and both reports in the same pull request</td>
+        <td class="no">No.</td>
+        <td class="no">No.</td>
+        <td class="ok">Yes.</td>
+      </tr>
+      <tr>
+        <td>Open the pull request on Gitea</td>
+        <td class="no">No. GitHub only.</td>
+        <td class="ok">Yes.</td>
+        <td class="ok">Yes. Through the Gitea API.</td>
+      </tr>
+      <tr>
+        <td>Rebase when the release branch moves</td>
+        <td class="ok">Yes.</td>
+        <td class="ok">Yes.</td>
+        <td class="part">Jenkins job must do this.</td>
+      </tr>
+      <tr>
+        <td>Minor-only rule</td>
+        <td class="part">Yes, by ignore rules.</td>
+        <td class="ok">Yes, by package rules.</td>
+        <td class="part">Jenkins job must check this before the PR opens.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="grid">
+    <div class="card red">
+      <h3>Dependabot</h3>
+      <ul>
+        <li>Its security updates come from the GitHub advisory database. This flow does not use that database.</li>
+        <li>It does not read a Nexus report.</li>
+        <li>It does not write tests. It does not run a baseline.</li>
+        <li>It works on GitHub. The code is on Gitea.</li>
+      </ul>
+      <div class="verdict no">verdict: not applicable</div>
+    </div>
+    <div class="card red">
+      <h3>Renovate</h3>
+      <ul>
+        <li>It runs on Gitea. This is its one advantage over Dependabot.</li>
+        <li>Its version source is the package registry. Nexus input needs custom rules on each run.</li>
+        <li>It does not write tests. It does not run the "before" report.</li>
+        <li>Two actors on one pull request. Renovate rebases the branch. The agent pushes tests. The commits conflict.</li>
+      </ul>
+      <div class="verdict no">verdict: not for this flow</div>
+    </div>
+    <div class="card green">
+      <h3>Pi agent, started by Jenkins</h3>
+      <ul>
+        <li>Runs in print or JSON mode. Jenkins calls it as one step.</li>
+        <li>Reads the Nexus report. Changes the pom. Finds the callers. Writes the tests. Runs the tests before and after the upgrade.</li>
+        <li>Opens the pull request on Gitea with the tests and both reports.</li>
+        <li>One actor owns the branch, the tests, and the pull request text.</li>
+      </ul>
+      <div class="verdict yes">verdict: selected</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h3>Guard rails that Jenkins must add</h3>
+    <p>The agent does not get the limits that the bots give for free. Jenkins must apply them.</p>
+    <ul>
+      <li>Permit minor upgrades only. Check the version before the pull request opens.</li>
+      <li>Permit changes to the pom files and to new test files only.</li>
+      <li>Both test runs must pass. A failed "before" run goes to Dev.</li>
+      <li>Rebase the branch when the release branch moves.</li>
+    </ul>
+  </div>
+
+  <!-- ============ FLOW ============ -->
+  <h2>End-to-end flow: from commit to merged fix</h2>
+  <p class="muted">Each step is one action. Each decision shows its exit.</p>
+
+  <section class="stage">
+    <div class="num">1</div>
+    <h3>Commit and build</h3>
+    <ol>
+      <li>A developer pushes a commit to a release branch on Gitea.</li>
+      <li>Gitea sends a webhook to Jenkins.</li>
+      <li>Jenkins starts the build job for that branch.</li>
+      <li>Jenkins compiles the code and runs the unit tests.</li>
+      <li>Jenkins makes the build artifact.</li>
+    </ol>
+  </section>
+
+  <section class="stage">
+    <div class="num">2</div>
+    <h3>Nexus scan</h3>
+    <ol start="6">
+      <li>Jenkins sends the artifact to Nexus IQ for a policy evaluation.</li>
+      <li>Nexus IQ scans each component in the artifact.</li>
+      <li>Nexus IQ returns a report. For each finding, the report has the component, the CVE, the severity, and the recommended version.</li>
+      <li>Jenkins reads the policy result.</li>
+      <li>If the report has no policy violation, the build is successful. The flow stops here. <span class="branch go">exit: green</span></li>
+      <li>If the report has one or more policy violations, the build fails. Jenkins keeps the build red.</li>
+    </ol>
+  </section>
+
+  <section class="stage">
+    <div class="num">3</div>
+    <h3>Start the repair job</h3>
+    <ol start="12">
+      <li>Jenkins starts a separate job, "OSS repair", for the failed build. The job gets the branch name, the commit, and the Nexus report.</li>
+      <li>The job checks Gitea for an open pull request for the same branch and the same components.</li>
+      <li>If an open pull request exists, the job stops. This prevents duplicate pull requests. <span class="branch note">exit: duplicate</span></li>
+      <li>If no open pull request exists, the job continues.</li>
+    </ol>
+  </section>
+
+  <section class="stage yellow">
+    <div class="num">4</div>
+    <h3>Sort the findings</h3>
+    <ol start="16">
+      <li>The job reads each finding in the Nexus report.</li>
+      <li>The job compares the current version and the recommended version.</li>
+      <li>If the recommended version is a major upgrade, the job sends the finding to Dev. Dev uses the current manual flow. <span class="branch stop">exit: Dev</span></li>
+      <li>If Nexus does not give a clean version, the job sends the finding to Dev. <span class="branch stop">exit: Dev</span></li>
+      <li>If the recommended version is a minor upgrade, the job gives the finding to the Pi agent.</li>
+    </ol>
+  </section>
+
+  <section class="stage yellow">
+    <div class="num">5</div>
+    <h3>Pi agent: analyze</h3>
+    <ol start="21">
+      <li>The Pi agent makes a new branch from the release branch.</li>
+      <li>The Pi agent finds the component in the pom files. It records if the component is direct or transitive.</li>
+      <li>The Pi agent searches the source code for classes that call the component.</li>
+      <li>If no class calls the component, the Pi agent marks the finding as "transitive, not called". It goes to Stage 7 for this finding. <span class="branch note">skip tests</span></li>
+      <li>If one or more classes call the component, the Pi agent lists those classes.</li>
+    </ol>
+  </section>
+
+  <section class="stage yellow">
+    <div class="num">6</div>
+    <h3>Pi agent: write and check the tests</h3>
+    <ol start="26">
+      <li>The Pi agent checks if JUnit tests or integration tests exist for the listed classes.</li>
+      <li>If tests exist, the Pi agent uses those tests.</li>
+      <li>If no tests exist, the Pi agent writes characterization tests for the listed classes. The tests record the current behavior.</li>
+      <li>The Pi agent runs the tests on the current jar version.</li>
+      <li>If a test fails on the current version, the Pi agent stops for that finding. It sends the finding and the test to Dev. A failed baseline is not valid evidence. <span class="branch stop">exit: Dev</span></li>
+      <li>If all tests pass, the Pi agent saves the test report as "before".</li>
+    </ol>
+  </section>
+
+  <section class="stage yellow">
+    <div class="num">7</div>
+    <h3>Pi agent: upgrade</h3>
+    <ol start="32">
+      <li>The Pi agent changes the version in the pom to the Nexus recommended version. For a transitive component, it adds the version to <code>dependencyManagement</code>.</li>
+      <li>The Pi agent compiles the code.</li>
+      <li>The Pi agent runs the full unit test suite, the integration tests, and the new tests.</li>
+      <li>The Pi agent saves the test report as "after".</li>
+      <li>If the compile or a test fails, the Pi agent removes that component from the pull request. It sends the finding, the error, and the reports to Dev. <span class="branch stop">exit: Dev</span></li>
+    </ol>
+  </section>
+
+  <section class="stage">
+    <div class="num">8</div>
+    <h3>Pull request</h3>
+    <ol start="37">
+      <li>The Pi agent commits the pom change and the new tests to the branch.</li>
+      <li>The Pi agent pushes the branch to Gitea.</li>
+      <li>The Pi agent opens one pull request on Gitea for the release branch. The pull request has all minor fixes from one Nexus report.</li>
+      <li>The pull request description has, for each component: the CVE, the old version, the new version, the Nexus reference, the list of classes that call the component, and the "before" and "after" test reports.</li>
+      <li>The Pi agent marks the new tests as characterization tests.</li>
+      <li>The Pi agent adds the label <code>oss-auto-fix</code> to the pull request.</li>
+    </ol>
+  </section>
+
+  <section class="stage">
+    <div class="num">9</div>
+    <h3>Verify and merge</h3>
+    <ol start="43">
+      <li>The pull request starts the Jenkins build job for that branch.</li>
+      <li>Jenkins runs the build, the tests, and the Nexus scan again.</li>
+      <li>If the Nexus scan is clean and the tests pass, Jenkins marks the pull request as green.</li>
+      <li>A reviewer checks the pull request. The reviewer does not test the fix manually. The reviewer confirms that the reports are present and green.</li>
+      <li>The reviewer merges the pull request. Or, if the policy permits, Jenkins merges the pull request automatically.</li>
+    </ol>
+  </section>
+
+  <section class="stage green">
+    <div class="num">10</div>
+    <h3>Close</h3>
+    <ol start="48">
+      <li>The merge starts a new build on the release branch.</li>
+      <li>The Nexus scan passes. The build is successful. <span class="branch go">exit: green</span></li>
+      <li>Jenkins closes the repair job. It records the components, the CVEs, and the pull request link.</li>
+      <li>For each other active release branch, the next build repeats this flow from Stage 1. Each branch gets its own pull request.</li>
+    </ol>
+  </section>
+
+  <!-- ============ EXITS ============ -->
+  <h2>Exits to Dev</h2>
+  <div class="grid">
+    <div class="card red"><h3>Major upgrade</h3><p class="muted">Step 18. The recommended version is a major version. The current manual flow applies.</p></div>
+    <div class="card red"><h3>No clean version</h3><p class="muted">Step 19. Nexus does not give a version with zero vulnerabilities.</p></div>
+    <div class="card red"><h3>Baseline fails</h3><p class="muted">Step 30. A new test fails on the current jar. The test or the code has a problem. The upgrade is not the cause.</p></div>
+    <div class="card red"><h3>Upgrade fails</h3><p class="muted">Step 36. The compile or a test fails after the upgrade. The pull request does not include that component.</p></div>
+  </div>
+
+  <div class="callout">
+    <h3>What the tests prove</h3>
+    <p>The tests show that the upgraded jar does not break your code. The tests also increase the code coverage, because the code has no tests today. The tests do not prove that the vulnerability is gone. The Nexus report is the evidence for that.</p>
+  </div>
+
+  <footer>Written in ASD-STE100 style &middot; Automated repair of minor OSS vulnerabilities &middot; Jenkins &middot; Nexus IQ &middot; Pi agent &middot; Gitea</footer>
+</main>
+</body>
+</html>

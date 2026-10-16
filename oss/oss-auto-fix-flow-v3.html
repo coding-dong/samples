@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automated repair of minor OSS vulnerabilities — v3</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --bg-2: #111821;
+    --panel: #141c27;
+    --panel-2: #0f1620;
+    --line: #243244;
+    --text: #e8edf2;
+    --muted: #9fb0c3;
+    --blue: #58c4dd;
+    --blue-d: #29abca;
+    --yellow: #ffd54a;
+    --teal: #5cd0b3;
+    --green: #83c167;
+    --red: #fc6255;
+    --gold: #f0ac5f;
+    --purple: #9a72ac;
+    --serif: "Latin Modern Roman", "CMU Serif", "Computer Modern", Georgia, "Times New Roman", serif;
+    --sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 50% -10%, #142033 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  main { max-width: 1060px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  h1, h2, h3, h4 { font-family: var(--serif); font-weight: 400; letter-spacing: 0.2px; }
+  h1 { font-size: 44px; line-height: 1.15; margin: 0 0 8px; }
+  h1 .accent { color: var(--yellow); }
+  h2 { font-size: 28px; margin: 0; color: var(--blue); }
+  h3 { font-size: 21px; margin: 26px 0 10px; color: var(--text); }
+  h4 { font-size: 18px; margin: 20px 0 8px; color: var(--teal); }
+  .subtitle { color: var(--muted); font-size: 19px; margin: 0 0 26px; }
+  .eyebrow {
+    display: inline-block; font-family: var(--mono); font-size: 12px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--teal); border: 1px solid var(--line);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 18px;
+  }
+  p { margin: 0 0 14px; }
+  .muted { color: var(--muted); }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-2); padding: 2px 6px; border-radius: 4px; color: var(--gold); }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.55; color: #d8e1ea; margin: 10px 0 16px; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  pre .c { color: var(--muted); } pre .k { color: var(--blue); } pre .s { color: var(--green); } pre .y { color: var(--yellow); }
+
+  /* Index */
+  .toc { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 24px; margin: 24px 0 30px; }
+  .toc-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .toc-head h2 { font-size: 22px; color: var(--text); }
+  .toc ol { margin: 0; padding-left: 0; list-style: none; columns: 2; column-gap: 32px; }
+  .toc li { break-inside: avoid; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .toc a { color: var(--text); text-decoration: none; display: flex; gap: 12px; align-items: baseline; }
+  .toc a:hover { color: var(--blue); }
+  .toc .n { font-family: var(--mono); color: var(--blue); font-size: 13px; min-width: 28px; }
+  .toc .d { color: var(--muted); font-size: 13.5px; display: block; margin-left: 40px; }
+  .btn { font-family: var(--mono); font-size: 12.5px; background: var(--bg-2); color: var(--blue); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .btn:hover { border-color: var(--blue); }
+  @media (max-width: 760px) { .toc ol { columns: 1; } }
+
+  /* Accordion */
+  details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin: 16px 0; overflow: hidden; scroll-margin-top: 20px; }
+  details.sec > summary { list-style: none; cursor: pointer; padding: 18px 22px; display: flex; align-items: center; gap: 16px; user-select: none; }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary .idx { font-family: var(--serif); font-size: 22px; color: var(--yellow); min-width: 34px; }
+  details.sec > summary .ttl { flex: 1; }
+  details.sec > summary .ttl small { display: block; color: var(--muted); font-size: 14px; font-family: var(--sans); }
+  details.sec > summary .chev { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; color: var(--blue); transition: transform .2s; }
+  details.sec[open] > summary .chev { transform: rotate(90deg); border-color: var(--blue); }
+  details.sec > summary:hover { background: var(--bg-2); }
+  details.sec[open] > summary { border-bottom: 1px solid var(--line); }
+  .body { padding: 18px 24px 24px; }
+
+  /* Diagram */
+  .diagram { background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin: 16px 0; overflow-x: auto; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+  .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+  .legend .l-blue::before { background: var(--blue); }
+  .legend .l-yellow::before { background: var(--yellow); }
+  .legend .l-green::before { background: var(--green); }
+  .legend .l-red::before { background: var(--red); }
+  .legend .l-purple::before { background: var(--purple); }
+  .cap { font-size: 13.5px; color: var(--muted); margin-top: 8px; font-style: italic; }
+
+  /* Cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; margin: 16px 0; }
+  .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px 14px; position: relative; overflow: hidden; }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--blue); }
+  .card.yellow::before { background: var(--yellow); }
+  .card.red::before { background: var(--red); }
+  .card.green::before { background: var(--green); }
+  .card.purple::before { background: var(--purple); }
+  .card h3, .card h4 { margin-top: 0; }
+  .card h3 { font-size: 19px; }
+  .card ul, .card ol { padding-left: 20px; margin: 8px 0 0; }
+  .card li { margin: 5px 0; }
+  .verdict { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--mono); font-size: 13px; }
+  .verdict.no { color: var(--red); } .verdict.yes { color: var(--green); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 18px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 13px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-size: 15px; }
+  th { font-family: var(--mono); font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); background: var(--bg-2); }
+  td:first-child { color: var(--text); font-weight: 500; }
+  .ok { color: var(--green); } .no { color: var(--red); } .part { color: var(--gold); }
+
+  /* Timeline */
+  .stage { position: relative; padding: 0 0 28px 60px; }
+  .stage::before { content: ""; position: absolute; left: 19px; top: 44px; bottom: 0; width: 2px; background: linear-gradient(var(--blue-d), var(--line)); }
+  .stage:last-of-type::before { display: none; }
+  .stage .num { position: absolute; left: 0; top: 2px; width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--blue); color: var(--blue); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 18px; }
+  .stage.yellow .num { border-color: var(--yellow); color: var(--yellow); }
+  .stage.green .num { border-color: var(--green); color: var(--green); }
+  .stage.purple .num { border-color: var(--purple); color: var(--purple); }
+  .stage h3 { margin: 6px 0 10px; }
+  .stage ol { margin: 0; padding-left: 22px; }
+  .stage ol li { margin: 6px 0; padding-left: 4px; }
+  .stage ol li::marker { color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
+  .tag.stop { background: rgba(252,98,85,0.14); color: var(--red); border: 1px solid rgba(252,98,85,0.35); }
+  .tag.go { background: rgba(131,193,103,0.14); color: var(--green); border: 1px solid rgba(131,193,103,0.35); }
+  .tag.note { background: rgba(255,213,74,0.12); color: var(--yellow); border: 1px solid rgba(255,213,74,0.35); }
+  .tag.new { background: rgba(154,114,172,0.18); color: #c9a8dc; border: 1px solid rgba(154,114,172,0.45); }
+
+  .callout { background: var(--bg-2); border: 1px solid var(--line); border-left: 4px solid var(--yellow); border-radius: 12px; padding: 16px 20px; margin: 18px 0; }
+  .callout h4 { margin: 0 0 8px; color: var(--yellow); }
+  .callout.red { border-left-color: var(--red); } .callout.red h4 { color: var(--red); }
+  .callout.green { border-left-color: var(--green); } .callout.green h4 { color: var(--green); }
+  .callout.purple { border-left-color: var(--purple); } .callout.purple h4 { color: #c9a8dc; }
+  .callout ul { margin: 6px 0 0; padding-left: 20px; }
+
+  .pr { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-size: 15px; margin: 10px 0 16px; }
+  .pr b { color: var(--blue); font-weight: 500; }
+  .pr .row { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .pr .row:last-child { border-bottom: none; }
+
+  .changes { font-size: 14.5px; }
+  footer { margin-top: 60px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; font-family: var(--mono); }
+
+  @media print {
+    body { background: #fff; color: #111; }
+    details.sec { break-inside: avoid; }
+    .card, .diagram, table, .callout, details.sec, .toc, pre, .pr { background: #fff; border-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <span class="eyebrow">Product Review Framework &middot; Business Case &middot; v3</span>
+  <h1>Automated repair of <span class="accent">minor OSS vulnerabilities</span></h1>
+  <p class="subtitle">From a merge to main to a merged fix. Sonatype IQ Server, confirmed with SecOps, finds the vulnerability and recommends the version. Jenkins controls the flow. A Pi agent, with an LLM, maps the jar to the code and writes the tests. A person reviews the evidence only.</p>
+
+  <!-- ================= INDEX ================= -->
+  <nav class="toc" id="index">
+    <div class="toc-head">
+      <h2>Index</h2>
+      <div>
+        <button class="btn" onclick="toggleAll(true)">Expand all</button>
+        <button class="btn" onclick="toggleAll(false)">Collapse all</button>
+      </div>
+    </div>
+    <ol>
+      <li><a href="#s1"><span class="n">01</span>Summary for the business case</a><span class="d">Problem, solution, outcome, what if not</span></li>
+      <li><a href="#s2"><span class="n">02</span>Overview diagram</a><span class="d">The full flow on one picture</span></li>
+      <li><a href="#s3"><span class="n">03</span>Why not Dependabot or Renovate</a><span class="d">Comparison and the reason for the Pi agent</span></li>
+      <li><a href="#s4"><span class="n">04</span>The Pi agent needs an LLM</a><span class="d">Where the LLM runs, cost, provider options</span></li>
+      <li><a href="#s5"><span class="n">05</span>Triggers</a><span class="d">Post-merge on main, IQ webhook or daily scan, feature branch gate</span></li>
+      <li><a href="#s6"><span class="n">06</span>Sonatype IQ Server</a><span class="d">Confirmed product. Licence tier sets the scope. API, waivers, write-back</span></li>
+      <li><a href="#s7"><span class="n">07</span>Jocata Vulnerability Score</a><span class="d">Every finding gets a fix. Two reachability sources</span></li>
+      <li><a href="#s8"><span class="n">08</span>Usage categories</a><span class="d">Called, called by config, not called. What the PR says</span></li>
+      <li><a href="#s9"><span class="n">09</span>How the agent maps a jar to the code</a><span class="d">dependency:tree, jdeps, rg, indirect checks</span></li>
+      <li><a href="#s10"><span class="n">10</span>Skills for the agent</a><span class="d">Four skills, one uses the LLM</span></li>
+      <li><a href="#s11"><span class="n">11</span>End-to-end flow</a><span class="d">Ten stages, 55 steps, with exits</span></li>
+      <li><a href="#s12"><span class="n">12</span>Exits to Dev</a><span class="d">The six cases that leave the automated path</span></li>
+      <li><a href="#s13"><span class="n">13</span>Risks and controls</a><span class="d">For the risk box on the slide</span></li>
+      <li><a href="#s14"><span class="n">14</span>PoC checklist, decisions, and blanks</a><span class="d">What the PoC confirms. What the slide needs</span></li>
+    </ol>
+  </nav>
+
+  <!-- ================= 01 SUMMARY ================= -->
+  <details class="sec" id="s1" open>
+    <summary><span class="idx">01</span><span class="ttl">Summary for the business case<small>Text for the Proposal Summary box</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <h4>Problem statement</h4>
+      <p>Minor OSS fixes follow the same manual path as major upgrades. The Nexus report goes to Dev. Dev applies the fix, tests it, and raises one pull request for each active release branch. The code has no tests around the jars, so each fix needs a manual check. A minor fix waits for a developer.</p>
+
+      <h4>Solution</h4>
+      <ol>
+        <li>Keep the current manual flow for major version upgrades of jars that the code calls.</li>
+        <li>For a minor upgrade, a Jenkins job reads the Sonatype IQ Server result and the remediation version from the IQ API. We use IQ Server. The licence tier sets the scope of the automation. The PoC confirms the tier and the enabled features.</li>
+        <li>A Pi agent maps the jar to the classes that call it, writes characterization tests for those classes, runs the tests on the current jar, applies the upgrade, and runs the tests again.</li>
+        <li>The agent opens one pull request on Gitea with the pom change, the new tests, and both test reports. Jenkins backports the pull request to the active release branches.</li>
+        <li>Every finding without an active IQ waiver gets a fix. The Jocata Vulnerability Score orders the fixes. The pull request states for each jar if the code calls it. After the merge, the job writes the pull request link back to the violation in IQ.</li>
+      </ol>
+
+      <h4>Outcome</h4>
+      <ul>
+        <li>Minor OSS fixes follow one path: Jenkins, Sonatype IQ, Pi agent, pull request. No manual test step.</li>
+        <li>Code coverage grows. Each fix adds tests to code that has none.</li>
+        <li>Unused dependencies are removed. This reduces the attack surface and the scan noise.</li>
+        <li>Client audits see the full remediation list with a score and the evidence for each item, inside IQ Server, the tool SecOps already uses.</li>
+      </ul>
+
+      <h4>What, if not</h4>
+      <p>Minor fixes stay manual. Dev keeps remediating, testing, and raising one pull request per release branch. Closure time stays tied to developer bandwidth. Code coverage does not grow.</p>
+    </div>
+  </details>
+
+  <!-- ================= 02 OVERVIEW ================= -->
+  <details class="sec" id="s2" open>
+    <summary><span class="idx">02</span><span class="ttl">Overview diagram<small>The full flow on one picture</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <div class="diagram">
+        <svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <defs>
+            <marker id="a-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#58c4dd"/></marker>
+            <marker id="a-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#fc6255"/></marker>
+            <marker id="a-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#83c167"/></marker>
+            <marker id="a-y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd54a"/></marker>
+          </defs>
+
+          <!-- Row 1: triggers -->
+          <rect x="20" y="30" width="170" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="105" y="55" text-anchor="middle" fill="#e8edf2" font-size="14">Merge to main</text>
+          <text x="105" y="74" text-anchor="middle" fill="#9fb0c3" font-size="12">post-merge build</text>
+
+          <rect x="20" y="104" width="170" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="105" y="129" text-anchor="middle" fill="#e8edf2" font-size="13">IQ webhook / daily scan</text>
+          <text x="105" y="148" text-anchor="middle" fill="#9fb0c3" font-size="12">new CVE, no commit</text>
+
+          <line x1="190" y1="60" x2="232" y2="90" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+          <line x1="190" y1="134" x2="232" y2="104" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <rect x="236" y="67" width="160" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="316" y="92" text-anchor="middle" fill="#e8edf2" font-size="14">Jenkins build</text>
+          <text x="316" y="111" text-anchor="middle" fill="#9fb0c3" font-size="12">compile + unit tests</text>
+
+          <line x1="396" y1="97" x2="438" y2="97" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <rect x="442" y="67" width="160" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="522" y="92" text-anchor="middle" fill="#e8edf2" font-size="14">Sonatype IQ scan</text>
+          <text x="522" y="111" text-anchor="middle" fill="#9fb0c3" font-size="12">policy + remediation</text>
+
+          <line x1="602" y1="97" x2="644" y2="97" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <polygon points="720,55 798,97 720,139 642,97" fill="#0b0f14" stroke="#ffd54a" stroke-width="2"/>
+          <text x="720" y="93" text-anchor="middle" fill="#ffd54a" font-size="13">violation?</text>
+          <text x="720" y="110" text-anchor="middle" fill="#9fb0c3" font-size="11">per component</text>
+
+          <line x1="798" y1="97" x2="846" y2="97" stroke="#83c167" stroke-width="2" marker-end="url(#a-g)"/>
+          <text x="822" y="88" text-anchor="middle" fill="#83c167" font-size="11">no</text>
+          <rect x="850" y="67" width="130" height="60" rx="10" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+          <text x="915" y="92" text-anchor="middle" fill="#e8edf2" font-size="14">Build green</text>
+          <text x="915" y="111" text-anchor="middle" fill="#9fb0c3" font-size="12">flow stops</text>
+
+          <line x1="720" y1="139" x2="720" y2="178" stroke="#fc6255" stroke-width="2" marker-end="url(#a-r)"/>
+          <text x="736" y="164" fill="#fc6255" font-size="11">yes, build red</text>
+
+          <!-- Row 2: repair job -->
+          <rect x="560" y="182" width="300" height="78" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="710" y="206" text-anchor="middle" fill="#e8edf2" font-size="14">Jenkins "OSS repair" job</text>
+          <text x="710" y="225" text-anchor="middle" fill="#9fb0c3" font-size="12">waivers &middot; dedupe &middot; IQ remediation API &middot; usage</text>
+          <text x="710" y="243" text-anchor="middle" fill="#9fb0c3" font-size="12">Jocata Vulnerability Score &middot; queue order</text>
+
+          <line x1="860" y1="221" x2="896" y2="221" stroke="#fc6255" stroke-width="2" marker-end="url(#a-r)"/>
+          <rect x="900" y="191" width="80" height="60" rx="10" fill="#0b0f14" stroke="#fc6255" stroke-width="2"/>
+          <text x="940" y="216" text-anchor="middle" fill="#e8edf2" font-size="14">Dev</text>
+          <text x="940" y="234" text-anchor="middle" fill="#9fb0c3" font-size="10.5">major, called</text>
+
+          <line x1="560" y1="221" x2="520" y2="221" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+          <text x="540" y="212" text-anchor="middle" fill="#58c4dd" font-size="11">auto</text>
+
+          <!-- Pi agent block -->
+          <rect x="20" y="178" width="498" height="186" rx="12" fill="#0f1620" stroke="#ffd54a" stroke-width="2"/>
+          <text x="36" y="202" fill="#ffd54a" font-size="13" font-family="JetBrains Mono, Menlo, monospace">PI AGENT + LLM</text>
+          <text x="500" y="202" text-anchor="end" fill="#9fb0c3" font-size="11">skills: maven-jar-usage, write-tests, maven-upgrade, gitea-pr</text>
+
+          <rect x="36" y="216" width="106" height="52" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="89" y="237" text-anchor="middle" fill="#e8edf2" font-size="12">map jar to code</text>
+          <text x="89" y="254" text-anchor="middle" fill="#9fb0c3" font-size="10.5">tree + jdeps + rg</text>
+          <line x1="142" y1="242" x2="156" y2="242" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <polygon points="214,216 270,242 214,268 158,242" fill="#0b0f14" stroke="#ffd54a" stroke-width="1.5"/>
+          <text x="214" y="246" text-anchor="middle" fill="#ffd54a" font-size="11">called?</text>
+
+          <line x1="270" y1="242" x2="284" y2="242" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+          <text x="278" y="228" text-anchor="middle" fill="#58c4dd" font-size="10">yes</text>
+          <rect x="286" y="216" width="100" height="52" rx="8" fill="#0b0f14" stroke="#9a72ac" stroke-width="1.5"/>
+          <text x="336" y="237" text-anchor="middle" fill="#e8edf2" font-size="12">write tests</text>
+          <text x="336" y="254" text-anchor="middle" fill="#9fb0c3" font-size="10.5">LLM, before run</text>
+
+          <line x1="386" y1="242" x2="400" y2="242" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+          <rect x="402" y="216" width="100" height="52" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="452" y="237" text-anchor="middle" fill="#e8edf2" font-size="12">upgrade pom</text>
+          <text x="452" y="254" text-anchor="middle" fill="#9fb0c3" font-size="10.5">run all tests again</text>
+
+          <!-- no path -->
+          <path d="M214 268 L214 300 L452 300 L452 268" fill="none" stroke="#58c4dd" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a-b)"/>
+          <text x="333" y="314" text-anchor="middle" fill="#9fb0c3" font-size="10.5">no: version change or removal, full suite + start check as evidence</text>
+
+          <text x="36" y="348" fill="#9fb0c3" font-size="11.5">Evidence: usage-result.json &middot; before-report &middot; after-report &middot; score with inputs</text>
+
+          <!-- down to PR -->
+          <line x1="269" y1="364" x2="269" y2="404" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <!-- Row 3 -->
+          <rect x="20" y="408" width="200" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="120" y="432" text-anchor="middle" fill="#e8edf2" font-size="14">Pull request on main</text>
+          <text x="120" y="451" text-anchor="middle" fill="#9fb0c3" font-size="12">pom + tests + reports + score</text>
+          <line x1="220" y1="438" x2="262" y2="438" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <rect x="266" y="408" width="190" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="361" y="432" text-anchor="middle" fill="#e8edf2" font-size="14">Jenkins PR build</text>
+          <text x="361" y="451" text-anchor="middle" fill="#9fb0c3" font-size="12">tests + IQ scan again</text>
+          <line x1="456" y1="438" x2="498" y2="438" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+
+          <rect x="502" y="408" width="190" height="60" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="597" y="432" text-anchor="middle" fill="#e8edf2" font-size="14">Review and merge</text>
+          <text x="597" y="451" text-anchor="middle" fill="#9fb0c3" font-size="12">reviewer reads evidence only</text>
+          <line x1="692" y1="438" x2="734" y2="438" stroke="#83c167" stroke-width="2" marker-end="url(#a-g)"/>
+
+          <rect x="738" y="408" width="242" height="60" rx="10" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+          <text x="859" y="432" text-anchor="middle" fill="#e8edf2" font-size="14">main green</text>
+          <text x="859" y="451" text-anchor="middle" fill="#9fb0c3" font-size="12">IQ scan passes &middot; PR link written to IQ</text>
+
+          <!-- Row 4: backport -->
+          <line x1="859" y1="468" x2="859" y2="500" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b)"/>
+          <rect x="560" y="504" width="420" height="44" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="770" y="531" text-anchor="middle" fill="#e8edf2" font-size="13">Jenkins backports the pull request to each active release branch</text>
+          <text x="20" y="531" fill="#9fb0c3" font-size="12">Feature branches: IQ scan runs as a gate only. No repair job.</text>
+        </svg>
+        <div class="legend">
+          <span class="l-blue">Automated step, script</span>
+          <span class="l-yellow">Decision or agent</span>
+          <span class="l-purple">LLM step</span>
+          <span class="l-green">Success exit</span>
+          <span class="l-red">Exit to Dev</span>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- ================= 03 WHY NOT BOTS ================= -->
+  <details class="sec" id="s3">
+    <summary><span class="idx">03</span><span class="ttl">Why not Dependabot or Renovate<small>Comparison and the reason for the Pi agent</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>Dependabot and Renovate do one task well. They change a version number and open a pull request. This flow needs five more tasks. The bots cannot do those tasks.</p>
+      <table>
+        <thead><tr><th>Requirement</th><th>Dependabot</th><th>Renovate</th><th>Pi agent</th></tr></thead>
+        <tbody>
+          <tr><td>Use the Sonatype IQ report as the only input</td><td class="no">No. GitHub advisories.</td><td class="part">Partial. Custom rules per library per run.</td><td class="ok">Yes.</td></tr>
+          <tr><td>Use the version that IQ recommends</td><td class="no">No. Registry latest.</td><td class="part">Partial. Pinned package rules.</td><td class="ok">Yes.</td></tr>
+          <tr><td>Map the jar to the classes that call it</td><td class="no">No.</td><td class="no">No.</td><td class="ok">Yes. Skill with jdeps and rg.</td></tr>
+          <tr><td>Write tests for code that has no tests</td><td class="no">No.</td><td class="no">No.</td><td class="ok">Yes. LLM step.</td></tr>
+          <tr><td>Run the tests on the current jar first</td><td class="no">No.</td><td class="no">No.</td><td class="ok">Yes. "Before" report.</td></tr>
+          <tr><td>Remove an unused declared dependency</td><td class="no">No.</td><td class="no">No.</td><td class="ok">Yes.</td></tr>
+          <tr><td>Put tests, both reports, and the score in one PR</td><td class="no">No.</td><td class="no">No.</td><td class="ok">Yes.</td></tr>
+          <tr><td>Open the pull request on Gitea</td><td class="no">No. GitHub only.</td><td class="ok">Yes.</td><td class="ok">Yes. Gitea API.</td></tr>
+          <tr><td>Rebase when main moves</td><td class="ok">Yes.</td><td class="ok">Yes.</td><td class="part">Jenkins job does this.</td></tr>
+          <tr><td>Minor-only rule</td><td class="part">Ignore rules.</td><td class="ok">Package rules.</td><td class="part">Jenkins checks before the PR opens.</td></tr>
+        </tbody>
+      </table>
+      <div class="grid">
+        <div class="card red"><h3>Dependabot</h3><ul><li>Security data from GitHub advisories. Not used here.</li><li>Does not read an IQ report. Does not write tests.</li><li>GitHub only. The code is on Gitea.</li></ul><div class="verdict no">verdict: not applicable</div></div>
+        <div class="card red"><h3>Renovate</h3><ul><li>Runs on Gitea. Its one advantage.</li><li>Version source is the registry. IQ input needs custom rules on each run.</li><li>Two actors on one PR. Renovate rebases, the agent pushes tests. The commits conflict.</li></ul><div class="verdict no">verdict: not for this flow</div></div>
+        <div class="card green"><h3>Pi agent, started by Jenkins</h3><ul><li>Runs in print or JSON mode. One Jenkins step.</li><li>Reads the IQ result. Maps the jar. Writes the tests. Runs before and after. Opens the PR on Gitea.</li><li>One actor owns the branch, the tests, and the PR text.</li></ul><div class="verdict yes">verdict: selected</div></div>
+      </div>
+      <div class="callout"><h4>Guard rails that Jenkins must add</h4><ul><li>Permit the categories in section 08 only. Check the version before the PR opens.</li><li>Permit changes to pom files and new test files only.</li><li>Both test runs must pass. A failed "before" run goes to Dev.</li><li>Rebase the branch when main moves.</li></ul></div>
+    </div>
+  </details>
+
+  <!-- ================= 04 LLM ================= -->
+  <details class="sec" id="s4">
+    <summary><span class="idx">04</span><span class="ttl">The Pi agent needs an LLM<small>Where the LLM runs, cost, provider options</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>Pi is a harness. It gives the model four tools: read, write, edit, bash. The model does the thinking. Without a model, Pi does nothing. The LLM adds a cost line and a data decision to the business case.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 150" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <defs><marker id="a-b2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#58c4dd"/></marker></defs>
+          <g>
+            <rect x="10" y="40" width="130" height="56" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/><text x="75" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">read IQ result</text><text x="75" y="82" text-anchor="middle" fill="#9fb0c3" font-size="10.5">script</text>
+            <line x1="140" y1="68" x2="158" y2="68" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b2)"/>
+            <rect x="160" y="40" width="130" height="56" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/><text x="225" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">sort + score</text><text x="225" y="82" text-anchor="middle" fill="#9fb0c3" font-size="10.5">script</text>
+            <line x1="290" y1="68" x2="308" y2="68" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b2)"/>
+            <rect x="310" y="40" width="130" height="56" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/><text x="375" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">map jar to code</text><text x="375" y="82" text-anchor="middle" fill="#9fb0c3" font-size="10.5">script, LLM reads</text>
+            <line x1="440" y1="68" x2="458" y2="68" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b2)"/>
+            <rect x="460" y="40" width="130" height="56" rx="8" fill="#1a1426" stroke="#9a72ac" stroke-width="2"/><text x="525" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">write tests</text><text x="525" y="82" text-anchor="middle" fill="#c9a8dc" font-size="10.5">LLM</text>
+            <line x1="590" y1="68" x2="608" y2="68" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b2)"/>
+            <rect x="610" y="40" width="130" height="56" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/><text x="675" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">upgrade + run tests</text><text x="675" y="82" text-anchor="middle" fill="#9fb0c3" font-size="10.5">script</text>
+            <line x1="740" y1="68" x2="758" y2="68" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b2)"/>
+            <rect x="760" y="40" width="130" height="56" rx="8" fill="#1a1426" stroke="#9a72ac" stroke-width="1.5" stroke-dasharray="4 3"/><text x="825" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">read failure</text><text x="825" y="82" text-anchor="middle" fill="#c9a8dc" font-size="10.5">LLM, only on failure</text>
+            <line x1="890" y1="68" x2="908" y2="68" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b2)"/>
+            <rect x="910" y="40" width="80" height="56" rx="8" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/><text x="950" y="64" text-anchor="middle" fill="#e8edf2" font-size="12.5">open PR</text><text x="950" y="82" text-anchor="middle" fill="#9fb0c3" font-size="10.5">script</text>
+          </g>
+          <text x="500" y="130" text-anchor="middle" fill="#9fb0c3" font-size="12">Seven steps. One step always uses the LLM. One step uses it only on a failure. Tokens are spent only where judgement is needed.</text>
+        </svg>
+      </div>
+
+      <h4>Provider options</h4>
+      <table>
+        <thead><tr><th>Option</th><th>Quality</th><th>Data</th><th>Cost line</th></tr></thead>
+        <tbody>
+          <tr><td>Cloud API: Anthropic, OpenAI, Google</td><td>Best for test writing</td><td>Code leaves the network. Needs vendor approval.</td><td>API tokens</td></tr>
+          <tr><td>Enterprise cloud: Azure OpenAI, AWS Bedrock</td><td>Same models</td><td>Code stays inside the cloud tenant. Usual choice for finance.</td><td>API tokens</td></tr>
+          <tr><td>Local model: Qwen or Llama coder on own GPU</td><td>Lower quality tests</td><td>Code stays on the network.</td><td>GPU hardware</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Text for the Effort Summary</h4>
+      <table>
+        <thead><tr><th>Project</th><th>Short description</th><th>HC #</th><th>Cost (Rs Lacs)</th></tr></thead>
+        <tbody><tr><td>LLM for the Pi agent</td><td>Model tokens per repair run. One LLM step per called jar: test writing. Estimate: &lt;N&gt; findings per month &times; &lt;M&gt; tokens per finding &times; &lt;rate&gt;. Or, if local: &lt;GPU count&gt; GPUs on &lt;server&gt;.</td><td>0</td><td>&lt;Rs Lacs&gt;</td></tr></tbody>
+      </table>
+
+      <div class="callout green"><h4>Outcome line</h4><p>The LLM cost replaces developer time. One manual fix takes &lt;X&gt; hours of Dev time per release branch. One agent run costs &lt;Y&gt; rupees of tokens. The case holds when Y is less than the cost of X.</p></div>
+      <div class="callout red"><h4>Controls</h4><ul><li>Monthly token budget in Jenkins. When reached, P3 and P4 findings go to Dev. P1 and P2 do not stop.</li><li>Enterprise tenant or local model. Get the data approval before the PoC.</li><li>Pi supports several providers. The job can switch the provider in config.</li></ul></div>
+    </div>
+  </details>
+
+  <!-- ================= 05 TRIGGERS ================= -->
+  <details class="sec" id="s5">
+    <summary><span class="idx">05</span><span class="ttl">Triggers<small>Post-merge on main, daily scan, feature branch gate</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>The repair job starts after a merge to main. It does not start on feature branches. A second trigger covers the case where a new CVE appears and nobody commits. IQ Server gives two options for it. <span class="tag new">v3</span></p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 330" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <defs>
+            <marker id="a-b3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#58c4dd"/></marker>
+            <marker id="a-r3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#fc6255"/></marker>
+            <marker id="a-y3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd54a"/></marker>
+          </defs>
+          <!-- branch lines -->
+          <text x="20" y="48" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">feature/*</text>
+          <line x1="120" y1="44" x2="980" y2="44" stroke="#243244" stroke-width="2"/>
+          <text x="20" y="138" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">main</text>
+          <line x1="120" y1="134" x2="980" y2="134" stroke="#58c4dd" stroke-width="3"/>
+          <text x="20" y="228" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">release/12.x</text>
+          <line x1="120" y1="224" x2="980" y2="224" stroke="#5cd0b3" stroke-width="2"/>
+          <text x="20" y="288" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">release/13.x</text>
+          <line x1="120" y1="284" x2="980" y2="284" stroke="#5cd0b3" stroke-width="2"/>
+
+          <!-- feature: PR with gate -->
+          <circle cx="200" cy="44" r="7" fill="#0b0f14" stroke="#9fb0c3" stroke-width="2"/>
+          <circle cx="260" cy="44" r="7" fill="#0b0f14" stroke="#9fb0c3" stroke-width="2"/>
+          <line x1="300" y1="44" x2="340" y2="124" stroke="#9fb0c3" stroke-width="2" stroke-dasharray="4 3"/>
+          <rect x="355" y="60" width="355" height="40" rx="7" fill="#0b0f14" stroke="#ffd54a" stroke-width="1.5"/>
+          <text x="532" y="77" text-anchor="middle" fill="#ffd54a" font-size="11.5">PR build on a feature branch: IQ scan as a gate</text>
+          <text x="532" y="92" text-anchor="middle" fill="#9fb0c3" font-size="9.8">new vulnerable jar: developer fixes before merge. existing finding: pass</text>
+          <line x1="300" y1="50" x2="353" y2="76" stroke="#ffd54a" stroke-width="1" stroke-dasharray="3 3"/>
+
+          <!-- main merge -> post-merge build -> repair -->
+          <circle cx="340" cy="134" r="8" fill="#58c4dd"/>
+          <text x="340" y="160" text-anchor="middle" fill="#58c4dd" font-size="11">merge</text>
+          <line x1="352" y1="134" x2="418" y2="134" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b3)"/>
+          <rect x="420" y="112" width="150" height="44" rx="7" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="495" y="130" text-anchor="middle" fill="#e8edf2" font-size="11.5">post-merge build</text>
+          <text x="495" y="146" text-anchor="middle" fill="#fc6255" font-size="10.5">IQ scan fails</text>
+          <line x1="570" y1="134" x2="618" y2="134" stroke="#fc6255" stroke-width="2" marker-end="url(#a-r3)"/>
+          <rect x="620" y="112" width="130" height="44" rx="7" fill="#0b0f14" stroke="#ffd54a" stroke-width="1.5"/>
+          <text x="685" y="130" text-anchor="middle" fill="#e8edf2" font-size="11.5">OSS repair job</text>
+          <text x="685" y="146" text-anchor="middle" fill="#9fb0c3" font-size="10.5">Pi agent</text>
+          <line x1="750" y1="134" x2="798" y2="134" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b3)"/>
+          <rect x="800" y="112" width="110" height="44" rx="7" fill="#0b0f14" stroke="#83c167" stroke-width="1.5"/>
+          <text x="855" y="130" text-anchor="middle" fill="#e8edf2" font-size="11.5">fix PR on main</text>
+          <text x="855" y="146" text-anchor="middle" fill="#83c167" font-size="10.5">merged</text>
+          <circle cx="940" cy="134" r="8" fill="#83c167"/>
+
+          <!-- daily schedule -->
+          <rect x="720" y="12" width="150" height="40" rx="7" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="795" y="29" text-anchor="middle" fill="#e8edf2" font-size="11.5">IQ webhook or daily scan</text>
+          <text x="795" y="44" text-anchor="middle" fill="#9fb0c3" font-size="10.5">new CVE, no commit</text>
+          <line x1="745" y1="52" x2="700" y2="110" stroke="#58c4dd" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a-b3)"/>
+          <text x="140" y="212" fill="#58c4dd" font-size="10.5">daily IQ scan runs here too</text>
+          <text x="140" y="272" fill="#58c4dd" font-size="10.5">daily IQ scan runs here too</text>
+
+          <!-- backports -->
+          <line x1="940" y1="142" x2="940" y2="216" stroke="#5cd0b3" stroke-width="2" marker-end="url(#a-b3)"/>
+          <circle cx="940" cy="224" r="7" fill="#5cd0b3"/>
+          <line x1="940" y1="232" x2="940" y2="276" stroke="#5cd0b3" stroke-width="2" marker-end="url(#a-b3)"/>
+          <circle cx="940" cy="284" r="7" fill="#5cd0b3"/>
+          <text x="925" y="258" text-anchor="end" fill="#5cd0b3" font-size="11">Jenkins backports the fix PR to each active release</text>
+          <text x="660" y="316" text-anchor="middle" fill="#9fb0c3" font-size="11">Each release branch runs its own PR build and IQ scan. Dedupe applies per component per branch.</text>
+        </svg>
+      </div>
+
+      <table>
+        <thead><tr><th>Branch</th><th>IQ scan</th><th>Repair job</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td>Feature branch</td><td>Yes, as a gate on the PR build</td><td class="no">No</td><td>Many short-lived branches. One PR per branch is noise. Two agents can repair the same jar with different tests. The fix reaches the branch at the next merge from main.</td></tr>
+          <tr><td>Main</td><td>Yes, post-merge and on new CVE</td><td class="ok">Yes</td><td>Stable base. One PR per fix. Developers get the fix at the next merge.</td></tr>
+          <tr><td>Active release branch</td><td>Yes, on new CVE and on backport PR</td><td class="part">Backport only</td><td>Receives the backport of the main PR. Each release can have a different jar version, so each backport runs its own tests.</td></tr>
+          <tr><td>Long-lived feature branch</td><td>Yes</td><td class="part">Opt in</td><td>A label or config file marks it as protected. The repair job treats it like main.</td></tr>
+        </tbody>
+      </table>
+      <h4>Second trigger: new CVE, no commit <span class="tag new">v3</span></h4>
+      <table>
+        <thead><tr><th>Option</th><th>How</th><th>Condition</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td>IQ webhook</td><td>IQ continuous monitoring re-evaluates the application when new vulnerability data arrives. A new policy violation fires a webhook. Jenkins receives it and starts the repair job with the application id and the violation id.</td><td>Continuous monitoring is on for the application. The PoC confirms it.</td><td class="ok">Preferred. No duplicate scan. The fix starts when IQ learns about the CVE.</td></tr>
+          <tr><td>Daily Jenkins scan</td><td>A scheduled job runs the build and the IQ scan on main and on each active release branch once a day.</td><td>None.</td><td class="part">Fallback if continuous monitoring is off.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><h4>Gate rule on feature branches</h4><p>If the PR adds a new vulnerable dependency, the gate fails. The developer who added it fixes it before the merge. If the finding already exists on main, the gate does not block the PR. The repair job on main fixes it.</p></div>
+    </div>
+  </details>
+
+  <!-- ================= 06 IQ SERVER ================= -->
+  <details class="sec" id="s6">
+    <summary><span class="idx">06</span><span class="ttl">Sonatype IQ Server<small>Confirmed product. Licence tier sets the scope. API, waivers, write-back</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <div class="callout green"><h4>Confirmed with SecOps <span class="tag new">v3</span></h4><p>We use Sonatype IQ Server, the product called Nexus Lifecycle. The remediation version comes from the IQ API. The agent does not select versions. The licence tier sets the scope of the automation. The PoC confirms the tier and the features that are enabled.</p></div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 250" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <defs>
+            <marker id="a-b6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#58c4dd"/></marker>
+            <marker id="a-g6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#83c167"/></marker>
+          </defs>
+          <!-- IQ server box -->
+          <rect x="380" y="20" width="240" height="210" rx="12" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="500" y="46" text-anchor="middle" fill="#58c4dd" font-size="13" font-family="JetBrains Mono, Menlo, monospace">IQ SERVER</text>
+          <text x="500" y="72" text-anchor="middle" fill="#e8edf2" font-size="12">policy evaluation</text>
+          <text x="500" y="92" text-anchor="middle" fill="#e8edf2" font-size="12">remediation version</text>
+          <text x="500" y="112" text-anchor="middle" fill="#e8edf2" font-size="12">securityReachable</text>
+          <text x="500" y="132" text-anchor="middle" fill="#e8edf2" font-size="12">waivers</text>
+          <text x="500" y="152" text-anchor="middle" fill="#e8edf2" font-size="12">EPSS, CVSS</text>
+          <text x="500" y="172" text-anchor="middle" fill="#e8edf2" font-size="12">violation comments</text>
+          <text x="500" y="192" text-anchor="middle" fill="#e8edf2" font-size="12">webhooks</text>
+          <text x="500" y="216" text-anchor="middle" fill="#9fb0c3" font-size="10.5">one source for SecOps and the client audit</text>
+
+          <!-- left: Jenkins in -->
+          <rect x="20" y="40" width="300" height="52" rx="9" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="170" y="61" text-anchor="middle" fill="#e8edf2" font-size="12">1. Jenkins plugin: scan compiled classes in target/</text>
+          <text x="170" y="79" text-anchor="middle" fill="#9fb0c3" font-size="10.5">returns scanId, report URL, policy result</text>
+          <line x1="320" y1="66" x2="376" y2="66" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b6)"/>
+
+          <rect x="20" y="110" width="300" height="52" rx="9" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="170" y="131" text-anchor="middle" fill="#e8edf2" font-size="12">2. Repair job: Priorities API + waivers API</text>
+          <text x="170" y="149" text-anchor="middle" fill="#9fb0c3" font-size="10.5">per finding: version, reachable, waived, EPSS</text>
+          <line x1="376" y1="136" x2="320" y2="136" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b6)"/>
+
+          <rect x="20" y="180" width="300" height="52" rx="9" fill="#0b0f14" stroke="#83c167" stroke-width="1.5"/>
+          <text x="170" y="201" text-anchor="middle" fill="#e8edf2" font-size="12">4. After merge: comment on the violation</text>
+          <text x="170" y="219" text-anchor="middle" fill="#9fb0c3" font-size="10.5">PR link, commit, old and new version. Optional.</text>
+          <line x1="320" y1="206" x2="376" y2="206" stroke="#83c167" stroke-width="2" marker-end="url(#a-g6)"/>
+
+          <!-- right: webhook out -->
+          <rect x="680" y="40" width="300" height="52" rx="9" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="830" y="61" text-anchor="middle" fill="#e8edf2" font-size="12">3. Webhook: new violation from re-evaluation</text>
+          <text x="830" y="79" text-anchor="middle" fill="#9fb0c3" font-size="10.5">starts the repair job. Needs continuous monitoring.</text>
+          <line x1="624" y1="66" x2="676" y2="66" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b6)"/>
+
+          <rect x="680" y="110" width="300" height="52" rx="9" fill="#0b0f14" stroke="#9fb0c3" stroke-width="1.5"/>
+          <text x="830" y="131" text-anchor="middle" fill="#e8edf2" font-size="12">SecOps and client auditor</text>
+          <text x="830" y="149" text-anchor="middle" fill="#9fb0c3" font-size="10.5">see the violation, the waiver, and the fix PR in IQ</text>
+          <line x1="624" y1="136" x2="676" y2="136" stroke="#9fb0c3" stroke-width="2" marker-end="url(#a-b6)"/>
+
+          <rect x="680" y="180" width="300" height="52" rx="9" fill="#0b0f14" stroke="#ffd54a" stroke-width="1.5"/>
+          <text x="830" y="201" text-anchor="middle" fill="#e8edf2" font-size="12">Licence tier and server switches</text>
+          <text x="830" y="219" text-anchor="middle" fill="#9fb0c3" font-size="10.5">decide which of these the PoC can use</text>
+        </svg>
+      </div>
+
+      <h4>Licence tier sets the scope <span class="tag new">v3</span></h4>
+      <table>
+        <thead><tr><th>Feature</th><th>Base Lifecycle</th><th>Advanced Recommendation Strategies</th><th>Effect on scope</th></tr></thead>
+        <tbody>
+          <tr><td>Remediation version, <code>next-no-violations</code></td><td class="ok">Yes</td><td class="ok">Yes</td><td>The automated path works.</td></tr>
+          <tr><td>Golden version, <code>recommended-non-breaking</code></td><td class="part">Needs the server switch <code>developerSuggestNonBreakingVersion</code></td><td class="ok">Yes</td><td>Safer version choice. Without it, use next-no-violations.</td></tr>
+          <tr><td>With-dependencies variants</td><td class="no">No</td><td class="ok">Yes</td><td>Without it, the agent runs the full suite to catch a dependency break.</td></tr>
+          <tr><td>Reachability, <code>securityReachable</code></td><td class="part">Yes, if the scan includes compiled classes</td><td class="part">Yes, same condition</td><td>Score input. Our skill remains the test input.</td></tr>
+          <tr><td>Waivers API</td><td class="ok">Yes</td><td class="ok">Yes</td><td>Skip findings SecOps has accepted.</td></tr>
+          <tr><td>EPSS</td><td class="part">Depends on server version</td><td class="part">Depends on server version</td><td>Score input. Fallback: CVSS only, reachability weight 30.</td></tr>
+          <tr><td>Webhooks, continuous monitoring</td><td class="ok">Yes</td><td class="ok">Yes</td><td>Second trigger without a daily scan.</td></tr>
+          <tr><td>Violation comments API</td><td class="ok">Yes</td><td class="ok">Yes</td><td>Write-back of the PR link. Optional.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Remediation version: order of preference</h4>
+      <table>
+        <thead><tr><th>Type in the response</th><th>Meaning</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td><code>recommended-non-breaking-with-dependencies</code></td><td>"Golden version". A non-breaking upgrade that clears violations for the jar and its dependencies. Maven only.</td><td class="ok">First choice, if the tier permits</td></tr>
+          <tr><td><code>recommended-non-breaking</code></td><td>Golden version for the jar only.</td><td class="ok">Second</td></tr>
+          <tr><td><code>next-no-violations-with-dependencies</code></td><td>Closest higher version with zero violations for the jar and its dependencies.</td><td class="part">Third</td></tr>
+          <tr><td><code>next-no-violations</code></td><td>Closest higher version with zero violations for the jar only.</td><td class="part">Fourth. Always present in the base tier.</td></tr>
+          <tr><td><code>next-non-failing</code></td><td>Closest higher version that does not fail the stage. Warnings can remain.</td><td class="no">Not used. Warnings stay in the report.</td></tr>
+          <tr><td>none present</td><td>No higher version meets the criteria.</td><td class="no">Exit to Dev</td></tr>
+        </tbody>
+      </table>
+
+      <h4>API calls the repair job makes</h4>
+<pre><code><span class="c"># 1. all findings of one scan, with remediation and reachability</span>
+<span class="k">GET</span>  /api/v2/applications/{publicId}/reports/{scanId}/priorities?includeRemediation=true
+
+<span class="c"># 2. remediation for one component, when the priorities row has none</span>
+<span class="k">POST</span> /api/v2/components/remediation/application/{applicationId}?stageId=release
+{ <span class="s">"componentIdentifier"</span>: { <span class="s">"format"</span>: <span class="s">"maven"</span>,
+    <span class="s">"coordinates"</span>: { <span class="s">"groupId"</span>: <span class="s">"..."</span>, <span class="s">"artifactId"</span>: <span class="s">"..."</span>, <span class="s">"version"</span>: <span class="s">"..."</span> } } }
+
+<span class="c"># 3. active waivers for the application. Skip a finding that has one.</span>
+<span class="k">GET</span>  /api/v2/policyWaivers/application/{applicationId}
+
+<span class="c"># 4. after the merge: write the PR link on the violation. Optional.</span>
+<span class="k">PUT</span>  /api/v2/policyViolations/{violationId}/comments
+{ <span class="s">"comment"</span>: <span class="s">"Fixed by PR #123, 2.15.2 -&gt; 2.15.4, commit abc123"</span> }</code></pre>
+      <p class="muted">Exact paths follow the server version. The PoC records the paths that work on our server.</p>
+
+      <h4>Waivers <span class="tag new">v3</span></h4>
+      <p>SecOps can accept a finding with a waiver that has an expiry date. The repair job reads the active waivers before it sorts the findings. A waived finding does not get a fix. The score report shows it as "waived until date". Without this step, the agent fixes findings that SecOps has accepted, and the daily report overstates the open risk.</p>
+
+      <h4>Write-back after the merge, optional <span class="tag new">v3</span></h4>
+      <p>Today the loop ends in Jenkins. The pull request merges. The next scan is clean. IQ forgets the violation. SecOps sees "violation gone" but not "fixed by pull request X on date Y". The write-back adds one API call after the merge. The job posts the pull request link, the merged commit, and the version change as a comment on the violation. The next scan closes the violation. The comment stays in the IQ history. SecOps and the auditor see the evidence in IQ. Nobody opens Jenkins or Gitea. This step is not required for the flow. Keep it as a PoC stretch item.</p>
+
+      <h4>Scan input matters</h4>
+      <p>IQ reachability analysis works on compiled classes, not on the pom. The Jenkins scan step must point IQ at <code>target/</code> with the built jar and the classes. If the current scan reads <code>pom.xml</code> only, <code>securityReachable</code> is empty for every finding and our skill is the only reachability source. This is the first check in the PoC.</p>
+
+      <h4>Dedupe, two options</h4>
+      <table>
+        <thead><tr><th>Option</th><th>Key</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>Gitea</td><td>Open PR with label <code>oss-auto-fix</code> for the same branch and component</td><td>Simple. Lost if the branch is renamed.</td></tr>
+          <tr><td>IQ</td><td>Same application, same component, same policy violation id. PR link stored in the violation comment.</td><td>Survives a branch rename. SecOps sees the PR link in IQ. Needs the write-back step.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ================= 07 SCORE ================= -->
+  <details class="sec" id="s7">
+    <summary><span class="idx">07</span><span class="ttl">Jocata Vulnerability Score<small>Every finding gets a fix. The score orders the queue</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>Clients of a financial nature read the report. They do not read the code. A vulnerable jar in the report must be fixed, even if the code does not call it, unless SecOps has an active waiver on it. The reachability check does not remove a finding. It sets the priority and the test depth.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 200" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <text x="20" y="28" fill="#e8edf2" font-size="14">Score = sum of five inputs, 0 to 100</text>
+          <!-- stacked bar -->
+          <rect x="20" y="44" width="384" height="40" fill="#fc6255" opacity="0.85"/>
+          <rect x="404" y="44" width="192" height="40" fill="#ffd54a" opacity="0.9"/>
+          <rect x="596" y="44" width="144" height="40" fill="#58c4dd" opacity="0.9"/>
+          <rect x="740" y="44" width="144" height="40" fill="#9a72ac" opacity="0.9"/>
+          <rect x="884" y="44" width="96" height="40" fill="#83c167" opacity="0.9"/>
+          <text x="212" y="69" text-anchor="middle" fill="#0b0f14" font-size="13" font-weight="600">Severity 40</text>
+          <text x="500" y="69" text-anchor="middle" fill="#0b0f14" font-size="13" font-weight="600">Reachability 20</text>
+          <text x="668" y="69" text-anchor="middle" fill="#0b0f14" font-size="13" font-weight="600">Exposure 15</text>
+          <text x="812" y="69" text-anchor="middle" fill="#0b0f14" font-size="13" font-weight="600">Exploit 15</text>
+          <text x="932" y="69" text-anchor="middle" fill="#0b0f14" font-size="12" font-weight="600">Client 10</text>
+          <text x="212" y="104" text-anchor="middle" fill="#9fb0c3" font-size="11">IQ CVSS</text>
+          <text x="500" y="104" text-anchor="middle" fill="#9fb0c3" font-size="11">agent map + IQ securityReachable</text>
+          <text x="668" y="104" text-anchor="middle" fill="#9fb0c3" font-size="11">service metadata</text>
+          <text x="812" y="104" text-anchor="middle" fill="#9fb0c3" font-size="11">CISA KEV / EPSS</text>
+          <text x="932" y="104" text-anchor="middle" fill="#9fb0c3" font-size="11">audit date</text>
+          <!-- bands -->
+          <rect x="20" y="130" width="192" height="30" rx="6" fill="#0b0f14" stroke="#9fb0c3"/><text x="116" y="150" text-anchor="middle" fill="#9fb0c3" font-size="12">P4  0 to 19  next release train</text>
+          <rect x="222" y="130" width="288" height="30" rx="6" fill="#0b0f14" stroke="#58c4dd"/><text x="366" y="150" text-anchor="middle" fill="#58c4dd" font-size="12">P3  20 to 49  next sprint</text>
+          <rect x="520" y="130" width="288" height="30" rx="6" fill="#0b0f14" stroke="#ffd54a"/><text x="664" y="150" text-anchor="middle" fill="#ffd54a" font-size="12">P2  50 to 79  PR in 3 days, merge in 10</text>
+          <rect x="818" y="130" width="162" height="30" rx="6" fill="#0b0f14" stroke="#fc6255"/><text x="899" y="150" text-anchor="middle" fill="#fc6255" font-size="12">P1  80+  PR 1 day, merge 3</text>
+          <text x="500" y="188" text-anchor="middle" fill="#9fb0c3" font-size="11.5">A low score does not mean no fix. It means a later fix. The report to the client must state this.</text>
+        </svg>
+      </div>
+
+      <table>
+        <thead><tr><th>Input</th><th>Source</th><th>Weight</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td>Severity</td><td>IQ CVSS score</td><td>40</td><td>CVSS 9 to 10 = 40. 7 to 8.9 = 30. 4 to 6.9 = 15. Below 4 = 5.</td></tr>
+          <tr><td>Reachability</td><td>Two sources: IQ <code>securityReachable</code> per CVE, and the agent map from section 09 per class</td><td>20</td><td>Either source says called = 20. Called by config only = 15. Both say not called = 5. Sources disagree = 20 and a review flag.</td></tr>
+          <tr><td>Exposure</td><td>Service metadata</td><td>15</td><td>Internet-facing = 15. Internal = 8. Batch = 3.</td></tr>
+          <tr><td>Exploit in the wild</td><td>CISA KEV list, EPSS from IQ</td><td>15</td><td>Known exploit = 15. EPSS above 0.5 = 10. Else 0.</td></tr>
+          <tr><td>Client commitment</td><td>Contract SLA for the product</td><td>10</td><td>Client audit due in 30 days = 10. Else 0.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Where the score sits in the flow</h4>
+      <ol>
+        <li>Stage 4 computes the score for each finding after the sort.</li>
+        <li>The repair job processes findings in score order. P1 first.</li>
+        <li>The pull request shows the score and the five inputs for each component.</li>
+        <li>The daily report shows open findings by band. This is the view for the client audit.</li>
+        <li>The monthly token budget applies to P3 and P4 first. P1 and P2 do not stop for budget.</li>
+      </ol>
+      <div class="callout"><h4>Two reachability sources <span class="tag new">v3</span></h4>
+        <ul>
+          <li>IQ answers "does the application reach the vulnerable method of this CVE". Yes or no per CVE. Free with the scan, if the scan includes compiled classes.</li>
+          <li>The agent skill answers "which of our classes call this jar". A class list. The test writer needs this list.</li>
+          <li>Keep both. IQ is the score input. The skill is the test input.</li>
+          <li>The two answers should agree. If IQ says reachable and the skill finds no caller, or the reverse, the finding gets the higher score and a review flag in the PR. A disagreement is a signal, not an error.</li>
+        </ul>
+      </div>
+      <p class="muted">If the server version does not export EPSS, use CVSS only and give reachability a weight of 30. The PoC confirms this.</p>
+    </div>
+  </details>
+
+  <!-- ================= 08 USAGE CATEGORIES ================= -->
+  <details class="sec" id="s8">
+    <summary><span class="idx">08</span><span class="ttl">Usage categories<small>Called, called by config, not called. What the PR says</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>The usage result from the agent map gives a third dimension to the sort. It decides the test depth, and it permits a major upgrade or a removal when no code calls the jar.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <!-- grid: rows = usage, cols = minor/major -->
+          <text x="250" y="28" fill="#9fb0c3" font-size="12" text-anchor="middle" font-family="JetBrains Mono, Menlo, monospace">MINOR UPGRADE</text>
+          <text x="650" y="28" fill="#9fb0c3" font-size="12" text-anchor="middle" font-family="JetBrains Mono, Menlo, monospace">MAJOR UPGRADE</text>
+          <text x="20" y="80" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">called</text>
+          <text x="20" y="160" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">not called,</text>
+          <text x="20" y="176" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">declared</text>
+          <text x="20" y="250" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">not called,</text>
+          <text x="20" y="266" fill="#9fb0c3" font-size="12" font-family="JetBrains Mono, Menlo, monospace">transitive</text>
+
+          <rect x="130" y="46" width="340" height="60" rx="9" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+          <text x="300" y="70" text-anchor="middle" fill="#e8edf2" font-size="13">Auto fix with new tests</text>
+          <text x="300" y="90" text-anchor="middle" fill="#9fb0c3" font-size="11">LLM writes tests. Before and after runs.</text>
+
+          <rect x="490" y="46" width="340" height="60" rx="9" fill="#0b0f14" stroke="#fc6255" stroke-width="2"/>
+          <text x="660" y="70" text-anchor="middle" fill="#e8edf2" font-size="13">Manual, Dev</text>
+          <text x="660" y="90" text-anchor="middle" fill="#9fb0c3" font-size="11">Current flow. API changes need a developer.</text>
+
+          <rect x="130" y="130" width="700" height="60" rx="9" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+          <text x="480" y="154" text-anchor="middle" fill="#e8edf2" font-size="13">Remove the dependency. Fallback: upgrade.</text>
+          <text x="480" y="174" text-anchor="middle" fill="#9fb0c3" font-size="11">Removal clears the CVE with no version choice. Evidence: compile + full suite + start check.</text>
+
+          <rect x="130" y="214" width="340" height="60" rx="9" fill="#0b0f14" stroke="#83c167" stroke-width="2"/>
+          <text x="300" y="238" text-anchor="middle" fill="#e8edf2" font-size="13">Auto fix, version override</text>
+          <text x="300" y="258" text-anchor="middle" fill="#9fb0c3" font-size="11">dependencyManagement. Full suite as evidence.</text>
+
+          <rect x="490" y="214" width="340" height="60" rx="9" fill="#0b0f14" stroke="#ffd54a" stroke-width="2"/>
+          <text x="660" y="238" text-anchor="middle" fill="#e8edf2" font-size="13">Auto fix with full gates, Dev reviews</text>
+          <text x="660" y="258" text-anchor="middle" fill="#9fb0c3" font-size="11">Can break the parent library. Suite + start check must pass.</text>
+
+          <text x="915" y="80" text-anchor="middle" fill="#9fb0c3" font-size="11">called by config:</text>
+          <text x="915" y="96" text-anchor="middle" fill="#9fb0c3" font-size="11">use the "called" row</text>
+        </svg>
+      </div>
+
+      <h4>What the pull request says for a jar that is not called</h4>
+      <div class="pr">
+        <div class="row"><b>Component:</b> com.fasterxml.jackson.core:jackson-databind 2.15.2 to 2.15.4</div>
+        <div class="row"><b>CVE:</b> CVE-2024-XXXX, CVSS 7.5</div>
+        <div class="row"><b>Usage:</b> No class in this repository calls this jar. The jar is a transitive dependency of spring-boot-starter-json 3.1.5.</div>
+        <div class="row"><b>Evidence:</b> Compile passed. Unit suite passed, 412 tests. Integration suite passed, 38 tests. Application start check passed.</div>
+        <div class="row"><b>New tests:</b> None. There is no caller to test.</div>
+        <div class="row"><b>Jocata Vulnerability Score:</b> 45, P3. Reachability input: 5, not called.</div>
+        <div class="row"><b>Commands run:</b> mvn dependency:tree, jdeps -verbose:class, rg. See usage-result.json.</div>
+      </div>
+      <p>The reviewer then knows two facts. The fix is a version change only. The absence of new tests is a decision, not an omission.</p>
+
+      <div class="callout red"><h4>Limits of "not called"</h4><p>A static search can miss usage. Before the agent marks a jar as "not called", it runs the indirect checks in section 09: reflection, Spring auto-configuration, SPI loaders, configuration files, annotations. If any check finds the jar, the result is "called by configuration".</p></div>
+    </div>
+  </details>
+
+  <!-- ================= 09 MAP JAR TO CODE ================= -->
+  <details class="sec" id="s9">
+    <summary><span class="idx">09</span><span class="ttl">How the agent maps a jar to the code<small>dependency:tree, jdeps, rg, indirect checks</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>The agent does not guess. Deterministic commands make the map from the jar to the classes. The LLM reads the map and the code. The map is the evidence in the pull request. A reviewer can run the same commands and get the same result.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <defs><marker id="a-b4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#58c4dd"/></marker></defs>
+          <!-- left: pom / tree -->
+          <rect x="20" y="30" width="200" height="110" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="120" y="52" text-anchor="middle" fill="#58c4dd" font-size="12" font-family="JetBrains Mono, Menlo, monospace">1. dependency:tree</text>
+          <text x="34" y="76" fill="#e8edf2" font-size="11" font-family="JetBrains Mono, Menlo, monospace">payments:3.2.0</text>
+          <text x="34" y="92" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">└ spring-boot-starter-web</text>
+          <text x="34" y="108" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">  └ starter-json</text>
+          <text x="34" y="124" fill="#fc6255" font-size="11" font-family="JetBrains Mono, Menlo, monospace">    └ jackson-databind 2.15.2</text>
+          <line x1="220" y1="85" x2="258" y2="85" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b4)"/>
+
+          <!-- middle: jar packages -->
+          <rect x="262" y="30" width="200" height="110" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="1.5"/>
+          <text x="362" y="52" text-anchor="middle" fill="#58c4dd" font-size="12" font-family="JetBrains Mono, Menlo, monospace">2. classes in the jar</text>
+          <text x="276" y="76" fill="#e8edf2" font-size="11" font-family="JetBrains Mono, Menlo, monospace">com.fasterxml.jackson.databind</text>
+          <text x="276" y="92" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">  .ObjectMapper</text>
+          <text x="276" y="108" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">  .JsonNode</text>
+          <text x="276" y="124" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">  .node.*  ...</text>
+          <line x1="462" y1="85" x2="500" y2="85" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b4)"/>
+
+          <!-- right: your classes -->
+          <rect x="504" y="30" width="476" height="110" rx="10" fill="#0b0f14" stroke="#9a72ac" stroke-width="1.5"/>
+          <text x="742" y="52" text-anchor="middle" fill="#c9a8dc" font-size="12" font-family="JetBrains Mono, Menlo, monospace">3. your classes that call it   (jdeps -verbose:class + rg)</text>
+          <text x="518" y="76" fill="#e8edf2" font-size="11" font-family="JetBrains Mono, Menlo, monospace">com.jocata.payments.api.PaymentMapper  -> ObjectMapper, JsonNode</text>
+          <text x="518" y="92" fill="#e8edf2" font-size="11" font-family="JetBrains Mono, Menlo, monospace">com.jocata.payments.audit.EventWriter  -> ObjectMapper</text>
+          <text x="518" y="108" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">hasTests: false, false</text>
+          <text x="518" y="124" fill="#9fb0c3" font-size="11" font-family="JetBrains Mono, Menlo, monospace">-> write-characterization-tests skill</text>
+
+          <!-- row 2: indirect -->
+          <rect x="20" y="170" width="960" height="60" rx="10" fill="#0b0f14" stroke="#ffd54a" stroke-width="1.5"/>
+          <text x="34" y="192" fill="#ffd54a" font-size="12" font-family="JetBrains Mono, Menlo, monospace">4. indirect checks, before "not called"</text>
+          <text x="34" y="214" fill="#9fb0c3" font-size="11.5">Class.forName / loadClass strings &middot; Spring @ConditionalOnClass and starters &middot; META-INF/services &middot; XML, YAML, properties that name a class &middot; annotation packages</text>
+
+          <!-- row 3: result -->
+          <rect x="20" y="246" width="960" height="40" rx="10" fill="#0b0f14" stroke="#83c167" stroke-width="1.5"/>
+          <text x="500" y="271" text-anchor="middle" fill="#e8edf2" font-size="12.5">Result: <tspan fill="#83c167">usage-result.json</tspan> with gav, dependencyType, parentLibrary, usage, callers, indirect, commandsRun. Input for the test skill and for the PR text.</text>
+        </svg>
+      </div>
+
+      <h4>Step 1. Find the jar in the dependency tree</h4>
+<pre><code>mvn dependency:tree -Dincludes=com.fasterxml.jackson.core:jackson-databind</code></pre>
+      <p>A path of one level is a direct dependency. A longer path is transitive, and it shows the library that brings the jar.</p>
+
+      <h4>Step 2. Find the classes inside the jar</h4>
+<pre><code>unzip -l ~/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.15.2/jackson-databind-2.15.2.jar | grep '\.class$'</code></pre>
+      <p>The agent reads the class names and makes a package list. Your code must use these names if it calls the jar.</p>
+
+      <h4>Step 3. Find your classes that use those packages</h4>
+      <p>Method A, source search. Fast. Works before compile.</p>
+<pre><code>rg -l "import com\.fasterxml\.jackson\.databind" src/main/java
+rg -l "com\.fasterxml\.jackson\.databind\." src/main/java src/main/resources</code></pre>
+      <p>Method B, bytecode analysis with <code>jdeps</code>. Exact. Shows your class, the jar class it calls, and the jar.</p>
+<pre><code>mvn compile -q
+jdeps -verbose:class -cp "$(mvn dependency:build-classpath -q -Dmdep.outputFile=/dev/stdout)" target/classes \
+  | grep "jackson-databind"
+
+<span class="c"># output</span>
+com.jocata.payments.api.PaymentMapper -> com.fasterxml.jackson.databind.ObjectMapper  jackson-databind-2.15.2.jar
+com.jocata.payments.api.PaymentMapper -> com.fasterxml.jackson.databind.JsonNode      jackson-databind-2.15.2.jar</code></pre>
+
+      <h4>Step 4. Find indirect usage</h4>
+      <table>
+        <thead><tr><th>Check</th><th>Command or rule</th></tr></thead>
+        <tbody>
+          <tr><td>Reflection</td><td><code>rg "Class\.forName|\.loadClass\(" src/main/java</code> and compare the strings with the package list.</td></tr>
+          <tr><td>Spring auto-configuration</td><td>The jar is on the classpath and a Spring starter is present. Treat as "called by configuration".</td></tr>
+          <tr><td>SPI loaders</td><td><code>unzip -l &lt;jar&gt; | grep META-INF/services</code>. If present, the jar loads at start.</td></tr>
+          <tr><td>Configuration files</td><td><code>rg "com\.fasterxml\.jackson\.databind" src/main/resources</code> for XML, YAML, properties.</td></tr>
+          <tr><td>Annotations</td><td><code>rg "@Json" src/main/java</code> for annotation packages inside the jar.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Step 5. Give the map to the LLM</h4>
+      <p>The LLM gets the map, the source of each class in the map, and the changelog between the two versions. Its task is narrow: for each class, write a test that calls the public methods which use the jar, and assert the current result. It does not search the codebase. The commands did the search.</p>
+    </div>
+  </details>
+
+  <!-- ================= 10 SKILLS ================= -->
+  <details class="sec" id="s10">
+    <summary><span class="idx">10</span><span class="ttl">Skills for the agent<small>Four skills, one uses the LLM</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p>The jar-to-code map is the same procedure on every run. Put the procedure in a skill. The agent loads the skill, runs the scripts, and reads the result. The skills connect through JSON files, not through the LLM memory.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 170" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+          <defs><marker id="a-b5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#58c4dd"/></marker></defs>
+          <rect x="20" y="30" width="186" height="80" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="113" y="56" text-anchor="middle" fill="#e8edf2" font-size="12.5" font-family="JetBrains Mono, Menlo, monospace">maven-jar-usage</text>
+          <text x="113" y="76" text-anchor="middle" fill="#9fb0c3" font-size="11">scripts only</text>
+          <text x="113" y="94" text-anchor="middle" fill="#83c167" font-size="11" font-family="JetBrains Mono, Menlo, monospace">usage-result.json</text>
+          <line x1="206" y1="70" x2="250" y2="70" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b5)"/>
+
+          <rect x="254" y="30" width="262" height="80" rx="10" fill="#1a1426" stroke="#9a72ac" stroke-width="2"/>
+          <text x="385" y="56" text-anchor="middle" fill="#e8edf2" font-size="12.5" font-family="JetBrains Mono, Menlo, monospace">write-characterization-tests</text>
+          <text x="385" y="76" text-anchor="middle" fill="#c9a8dc" font-size="11">LLM</text>
+          <text x="385" y="94" text-anchor="middle" fill="#83c167" font-size="11" font-family="JetBrains Mono, Menlo, monospace">*Test.java, before-report.xml</text>
+          <line x1="516" y1="70" x2="560" y2="70" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b5)"/>
+
+          <rect x="564" y="30" width="186" height="80" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="657" y="56" text-anchor="middle" fill="#e8edf2" font-size="12.5" font-family="JetBrains Mono, Menlo, monospace">maven-upgrade</text>
+          <text x="657" y="76" text-anchor="middle" fill="#9fb0c3" font-size="11">script</text>
+          <text x="657" y="94" text-anchor="middle" fill="#83c167" font-size="11" font-family="JetBrains Mono, Menlo, monospace">pom.xml, after-report.xml</text>
+          <line x1="750" y1="70" x2="794" y2="70" stroke="#58c4dd" stroke-width="2" marker-end="url(#a-b5)"/>
+
+          <rect x="798" y="30" width="182" height="80" rx="10" fill="#0b0f14" stroke="#58c4dd" stroke-width="2"/>
+          <text x="889" y="56" text-anchor="middle" fill="#e8edf2" font-size="12.5" font-family="JetBrains Mono, Menlo, monospace">gitea-pull-request</text>
+          <text x="889" y="76" text-anchor="middle" fill="#9fb0c3" font-size="11">script + template</text>
+          <text x="889" y="94" text-anchor="middle" fill="#83c167" font-size="11" font-family="JetBrains Mono, Menlo, monospace">PR on Gitea</text>
+
+          <text x="500" y="150" text-anchor="middle" fill="#9fb0c3" font-size="12">Jenkins reads the same JSON files to compute the score and to fill the PR text. The scripts write the files, not the LLM.</text>
+        </svg>
+      </div>
+
+      <h4>Skill layout</h4>
+<pre><code>.pi/skills/maven-jar-usage/
+├── SKILL.md                 <span class="c"># when to use, inputs, outputs, steps</span>
+├── scripts/
+│   ├── resolve-jar.sh       <span class="c"># step 1: dependency tree, direct or transitive</span>
+│   ├── list-packages.sh     <span class="c"># step 2: packages inside the jar</span>
+│   ├── find-callers.sh      <span class="c"># step 3: rg + jdeps, writes callers.json</span>
+│   └── find-indirect.sh     <span class="c"># step 4: reflection, SPI, Spring, config files</span>
+└── reference/
+    └── output-schema.json   <span class="c"># the contract for usage-result.json</span></code></pre>
+
+      <h4>SKILL.md, in short</h4>
+<pre><code>---
+name: maven-jar-usage
+description: Map a Maven jar (groupId:artifactId:version) to the classes in this repository that use it. Use before you write tests for an OSS upgrade.
+---
+<span class="y">## Input</span>
+- GAV of the vulnerable jar
+- Repository root
+
+<span class="y">## Steps</span>
+1. Run scripts/resolve-jar.sh &lt;GAV&gt;. Read: direct or transitive, and the parent library.
+2. Run scripts/list-packages.sh &lt;GAV&gt;. Read: package list.
+3. Run scripts/find-callers.sh &lt;GAV&gt;. Read: callers.json.
+4. Run scripts/find-indirect.sh &lt;GAV&gt;. Read: indirect usage list.
+5. Set the usage result:
+   - "called"            if callers.json has one or more classes
+   - "called-by-config"  if the indirect list is not empty and callers.json is empty
+   - "not-called"        if both are empty
+
+<span class="y">## Output</span>
+Write usage-result.json. Put it in the pull request description.
+
+<span class="y">## Rules</span>
+- Do not write tests in this skill. Return the map only.
+- Do not change pom.xml in this skill.
+- If a script fails, stop and report the error. Do not guess the result.</code></pre>
+
+      <h4>The output contract</h4>
+<pre><code>{
+  <span class="s">"gav"</span>: <span class="s">"com.fasterxml.jackson.core:jackson-databind:2.15.2"</span>,
+  <span class="s">"dependencyType"</span>: <span class="s">"transitive"</span>,
+  <span class="s">"parentLibrary"</span>: <span class="s">"org.springframework.boot:spring-boot-starter-json:3.1.5"</span>,
+  <span class="s">"usage"</span>: <span class="s">"called"</span>,
+  <span class="s">"callers"</span>: [
+    { <span class="s">"class"</span>: <span class="s">"com.jocata.payments.api.PaymentMapper"</span>,
+      <span class="s">"file"</span>: <span class="s">"src/main/java/com/jocata/payments/api/PaymentMapper.java"</span>,
+      <span class="s">"uses"</span>: [<span class="s">"com.fasterxml.jackson.databind.ObjectMapper"</span>, <span class="s">"com.fasterxml.jackson.databind.JsonNode"</span>],
+      <span class="s">"hasTests"</span>: false }
+  ],
+  <span class="s">"indirect"</span>: [],
+  <span class="s">"commandsRun"</span>: [<span class="s">"mvn dependency:tree ..."</span>, <span class="s">"jdeps -verbose:class ..."</span>]
+}</code></pre>
+
+      <table>
+        <thead><tr><th>Skill</th><th>Input</th><th>Output</th><th>LLM</th></tr></thead>
+        <tbody>
+          <tr><td><code>maven-jar-usage</code></td><td>GAV</td><td><code>usage-result.json</code></td><td class="ok">No. Scripts only. The LLM reads the result.</td></tr>
+          <tr><td><code>write-characterization-tests</code></td><td><code>usage-result.json</code>, source files, changelog</td><td>new test files, <code>before-report.xml</code></td><td class="part">Yes.</td></tr>
+          <tr><td><code>maven-upgrade</code></td><td>GAV, target version, dependency type</td><td>pom change, <code>after-report.xml</code></td><td class="ok">No. Script.</td></tr>
+          <tr><td><code>gitea-pull-request</code></td><td>all JSON files and reports</td><td>pull request on Gitea</td><td class="ok">No. Script. Template fills the text.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout"><h4>Two rules for the scripts</h4><ul><li>Pin the tool versions in the Jenkins agent image: Maven, JDK with <code>jdeps</code>, and <code>rg</code>. The skill must give the same result on every run.</li><li>Let the scripts write the files. Do not let the LLM copy command output into a file. The copy can lose lines.</li></ul></div>
+    </div>
+  </details>
+
+  <!-- ================= 11 FLOW ================= -->
+  <details class="sec" id="s11">
+    <summary><span class="idx">11</span><span class="ttl">End-to-end flow<small>Ten stages, 52 steps, with exits</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <p class="muted">Each step is one action. Each decision shows its exit. <span class="tag new">v2</span> and <span class="tag new">v3</span> mark steps that changed in that version.</p>
+
+      <section class="stage">
+        <div class="num">1</div>
+        <h3>Trigger and build</h3>
+        <ol>
+          <li>A merge to main starts the build. Or an IQ webhook on a new violation, or the daily schedule, starts the repair job for a protected branch. <span class="tag new">v3</span></li>
+          <li>Jenkins compiles the code and runs the unit tests.</li>
+          <li>Jenkins makes the build artifact.</li>
+        </ol>
+      </section>
+
+      <section class="stage">
+        <div class="num">2</div>
+        <h3>Sonatype IQ scan</h3>
+        <ol start="4">
+          <li>The Sonatype Jenkins plugin sends the compiled classes and the jar in <code>target/</code> to IQ Server for a policy evaluation. <span class="tag new">v3</span></li>
+          <li>IQ Server scans each component in the artifact.</li>
+          <li>IQ Server returns the result. For each finding: the component, the CVE, CVSS, EPSS, <code>securityReachable</code>, the remediation type, and the remediation version. <span class="tag new">v2</span></li>
+          <li>The plugin returns the <code>scanId</code>, the report URL, and the policy result to the build. No parsing. <span class="tag new">v3</span></li>
+          <li>If there is no policy violation, the build is successful. The flow stops. <span class="tag go">exit: green</span></li>
+          <li>If there is one or more violations, the build fails. Jenkins keeps the build red.</li>
+        </ol>
+      </section>
+
+      <section class="stage">
+        <div class="num">3</div>
+        <h3>Start the repair job</h3>
+        <ol start="10">
+          <li>Jenkins starts the separate job "OSS repair" with the branch, the commit, the <code>scanId</code>, and the report URL from the plugin.</li>
+          <li>The job calls the Priorities API with <code>includeRemediation=true</code>. <span class="tag new">v2</span></li>
+          <li>The job reads the active waivers for the application. A waived finding leaves the queue and is reported as "waived until date". <span class="tag new">v3</span> <span class="tag note">exit: waived</span></li>
+          <li>The job checks for an open pull request for the same branch and the same components, in Gitea or in the IQ violation comment.</li>
+          <li>If an open pull request exists, the job stops. <span class="tag note">exit: duplicate</span></li>
+          <li>If no open pull request exists, the job continues.</li>
+        </ol>
+      </section>
+
+      <section class="stage yellow">
+        <div class="num">4</div>
+        <h3>Map, sort, and score</h3>
+        <ol start="16">
+          <li>For each finding, the job runs the <code>maven-jar-usage</code> skill. Result: called, called by config, or not called. <span class="tag new">v2</span></li>
+          <li>The job picks the remediation version in the order of section 06: golden version first, if the tier permits, then next-no-violations. <span class="tag new">v2</span></li>
+          <li>If no version is present, the job sends the finding to Dev. <span class="tag stop">exit: Dev</span></li>
+          <li>The job compares the current version and the chosen version: minor or major.</li>
+          <li>If the jar is called and the upgrade is major, the job sends the finding to Dev. <span class="tag stop">exit: Dev</span></li>
+          <li>All other findings stay in the automated path. Each gets a category from section 08. <span class="tag new">v2</span></li>
+          <li>The job computes the Jocata Vulnerability Score. Reachability uses IQ <code>securityReachable</code> and the skill result. A disagreement sets a review flag. <span class="tag new">v3</span></li>
+          <li>The job orders the findings by score. P1 first. It checks the token budget for P3 and P4. <span class="tag new">v2</span></li>
+        </ol>
+      </section>
+
+      <section class="stage purple">
+        <div class="num">5</div>
+        <h3>Pi agent: tests for called jars</h3>
+        <ol start="24">
+          <li>The Pi agent makes a branch from main.</li>
+          <li>For a jar that is not called, the agent skips to Stage 6. No new tests. <span class="tag note">version only</span></li>
+          <li>For a called jar, the agent reads <code>usage-result.json</code> and checks if tests exist for the listed classes.</li>
+          <li>If tests exist, the agent uses those tests.</li>
+          <li>If no tests exist, the agent runs <code>write-characterization-tests</code>. The LLM writes tests for the listed classes. The tests record the current behavior.</li>
+          <li>The agent runs the tests on the current jar version.</li>
+          <li>If a test fails on the current version, the agent stops for that finding. It sends the finding and the test to Dev. A failed baseline is not valid evidence. <span class="tag stop">exit: Dev</span></li>
+          <li>If all tests pass, the agent saves <code>before-report.xml</code>.</li>
+        </ol>
+      </section>
+
+      <section class="stage yellow">
+        <div class="num">6</div>
+        <h3>Pi agent: upgrade or remove</h3>
+        <ol start="32">
+          <li>For a declared jar that is not called, the agent removes the dependency from the pom. <span class="tag new">v2</span></li>
+          <li>For all other jars, the agent sets the chosen version. For a transitive jar, it adds the version to <code>dependencyManagement</code>.</li>
+          <li>The agent compiles the code.</li>
+          <li>If the compile fails after a removal, the agent restores the dependency and applies the upgrade instead. <span class="tag new">v2</span></li>
+          <li>The agent runs the full unit suite, the integration suite, the new tests, and the application start check.</li>
+          <li>The agent saves <code>after-report.xml</code>.</li>
+          <li>If the compile or a test fails, the agent removes that component from the pull request. It sends the finding, the error, and the reports to Dev. <span class="tag stop">exit: Dev</span></li>
+        </ol>
+      </section>
+
+      <section class="stage">
+        <div class="num">7</div>
+        <h3>Pull request on main</h3>
+        <ol start="39">
+          <li>The agent commits the pom change and the new tests.</li>
+          <li>The agent pushes the branch to Gitea.</li>
+          <li>The agent runs <code>gitea-pull-request</code>. One pull request for all fixes from one scan.</li>
+          <li>For each component, the pull request has: CVE, old and new version, IQ remediation type, IQ report URL, usage result from both sources, callers, before and after reports, score with its five inputs, review flag if any, and the commands run. <span class="tag new">v3</span></li>
+          <li>For a jar that is not called, the text states it. For a removal, the text states it.</li>
+          <li>The agent marks the new tests as characterization tests and adds the label <code>oss-auto-fix</code>.</li>
+        </ol>
+      </section>
+
+      <section class="stage">
+        <div class="num">8</div>
+        <h3>Verify and merge</h3>
+        <ol start="45">
+          <li>The pull request starts the Jenkins PR build.</li>
+          <li>Jenkins runs the build, the tests, and the IQ scan again.</li>
+          <li>If the IQ scan is clean and the tests pass, Jenkins marks the pull request green.</li>
+          <li>A reviewer checks the evidence. The reviewer does not test the fix manually. A "major, not called, transitive" component gets a Dev reviewer. <span class="tag new">v2</span></li>
+          <li>The reviewer merges the pull request. Or, if the policy permits, Jenkins merges it automatically.</li>
+        </ol>
+      </section>
+
+      <section class="stage">
+        <div class="num">9</div>
+        <h3>Backport</h3>
+        <ol start="50">
+          <li>Jenkins cherry-picks the merged commit to each active release branch and opens a pull request there. <span class="tag new">v2</span></li>
+          <li>Each backport pull request runs its own PR build, tests, and IQ scan. If a release branch has a different jar version, the agent repeats Stages 5 and 6 on that branch.</li>
+        </ol>
+      </section>
+
+      <section class="stage green">
+        <div class="num">10</div>
+        <h3>Close</h3>
+        <ol start="52">
+          <li>The merge starts a new build. The IQ scan passes. <span class="tag go">exit: green</span></li>
+          <li>Optional: the job posts the pull request link, the commit, and the version change as a comment on the violation in IQ. <span class="tag new">v3</span></li>
+          <li>Jenkins closes the repair job. It records the components, the CVEs, the scores, and the pull request links.</li>
+          <li>The open findings by band are visible in IQ. The Jenkins report is a copy for the slide. <span class="tag new">v3</span></li>
+        </ol>
+      </section>
+    </div>
+  </details>
+
+  <!-- ================= 12 EXITS ================= -->
+  <details class="sec" id="s12">
+    <summary><span class="idx">12</span><span class="ttl">Exits to Dev<small>The six cases that leave the automated path</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <div class="grid">
+        <div class="card red"><h3>No clean version</h3><p class="muted">Step 18. IQ gives no remediation version. No higher version clears the policy.</p></div>
+        <div class="card red"><h3>Major upgrade of a called jar</h3><p class="muted">Step 20. The code calls the jar and the fix is a major version. API changes need a developer.</p></div>
+        <div class="card red"><h3>Baseline fails</h3><p class="muted">Step 30. A new test fails on the current jar. The test or the code has a problem. The upgrade is not the cause.</p></div>
+        <div class="card red"><h3>Upgrade fails</h3><p class="muted">Step 38. The compile, a test, or the start check fails after the upgrade. The pull request does not include that component.</p></div>
+        <div class="card yellow"><h3>Token budget reached</h3><p class="muted">Step 23. The monthly LLM budget is used. P3 and P4 findings go to Dev until the next month. P1 and P2 continue.</p></div>
+        <div class="card yellow"><h3>Active waiver <span class="tag new">v3</span></h3><p class="muted">Step 13. SecOps has accepted the finding until a date. No fix. The report shows "waived until date". The finding returns to the queue when the waiver expires.</p></div>
+      </div>
+      <div class="callout green"><h4>What the tests prove</h4><p>The tests show that the upgraded jar does not break your code. The tests also increase the code coverage, because the code has no tests today. The tests do not prove that the vulnerability is gone. The IQ report is the evidence for that.</p></div>
+    </div>
+  </details>
+
+  <!-- ================= 13 RISKS ================= -->
+  <details class="sec" id="s13">
+    <summary><span class="idx">13</span><span class="ttl">Risks and controls<small>For the risk box on the slide</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <table>
+        <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+        <tbody>
+          <tr><td>A minor bump can still change behavior.</td><td>Before and after test runs. PR build with IQ scan. Review step.</td></tr>
+          <tr><td>Generated tests can be wrong or can freeze a current bug.</td><td>Baseline run on the current jar. Tests are marked as characterization tests. Reviewer reads them as regression evidence, not as a spec.</td></tr>
+          <tr><td>"Not called" can be wrong. Reflection and configuration hide usage.</td><td>Indirect checks in section 09. Full suite and start check for every not-called fix. Dev reviews the major-transitive case.</td></tr>
+          <tr><td>A major upgrade of a transitive jar can break the parent library.</td><td>Full gates: compile, unit, integration, start check. Dev reviewer on the PR.</td></tr>
+          <tr><td>Source code goes to the model provider.</td><td>Enterprise tenant or local model. Data approval before the PoC.</td></tr>
+          <tr><td>LLM cost grows with findings. A CVE in a shared jar hits every branch in one day.</td><td>Monthly token budget. P3 and P4 pause first. Scripts do the search; the LLM only writes tests.</td></tr>
+          <tr><td>Model provider changes price, model, or availability.</td><td>Pi supports several providers. Provider is a config value.</td></tr>
+          <tr><td>The IQ result is the only vulnerability input. A stale result picks a wrong version.</td><td>PR build runs a fresh IQ scan. Webhook or daily scan on protected branches.</td></tr>
+          <tr><td>IQ reachability and the agent map can disagree. <span class="tag new">v3</span></td><td>The higher score applies. The PR shows both results and a review flag. The PoC measures how often this happens.</td></tr>
+          <tr><td>The licence tier does not include a feature the design uses. <span class="tag new">v3</span></td><td>The scope table in section 06 names the fallback for each feature. The PoC records the tier before the build starts.</td></tr>
+          <tr><td>The agent fixes a finding SecOps has already accepted. <span class="tag new">v3</span></td><td>The repair job reads the waivers API before it sorts. A waived finding leaves the queue.</td></tr>
+          <tr><td>A low score reads as "no fix" to a client.</td><td>Every finding gets a fix. The client report states the band and the target date for each item.</td></tr>
+          <tr><td>Integration tests need an environment. They can dominate the job time.</td><td>Jenkins agents and test environments are in the cost line. Start with unit suite plus start check; add integration suite per named service.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ================= 14 DECISIONS ================= -->
+  <details class="sec" id="s14">
+    <summary><span class="idx">14</span><span class="ttl">PoC checklist, decisions, and blanks<small>What the PoC confirms. What the slide needs</small></span><span class="chev">&#8250;</span></summary>
+    <div class="body">
+      <div class="grid">
+        <div class="card yellow"><h3>Decisions</h3><ul><li>Dedupe in Gitea or in IQ.</li><li>Write-back to IQ in the first release, or later.</li><li>Model provider and region. Where code is permitted to go.</li><li>Monthly token budget.</li><li>Auto-merge on green, or reviewer confirms the pipeline result.</li><li>Integration suite mandatory on day one, or per named service.</li><li>Which release branches are "active".</li></ul></div>
+        <div class="card blue"><h3>Blanks for the slide</h3><ul><li>&lt;N&gt; findings per month: count from the last three months of IQ reports.</li><li>&lt;M&gt; tokens per finding: measure in the PoC on two or three findings.</li><li>&lt;X&gt; hours per manual fix: ask Dev for the average.</li><li>Cost, HC/FTE, timeline, product, group, accountable person.</li></ul></div>
+        <div class="card green"><h3>PoC checklist for IQ Server <span class="tag new">v3</span></h3><p class="muted">Each line gives a yes or no that fixes the scope. No guess before the PoC.</p><ol><li>Record the IQ Server version and the licence tier from the admin page.</li><li>Run one scan with compiled classes. Confirm <code>securityReachable</code> is filled.</li><li>Call the remediation API on one finding. Record which types come back.</li><li>Read one waiver through the API.</li><li>Confirm EPSS is present in the vulnerability data.</li><li>Fire the webhook once from a re-evaluation, if continuous monitoring is on.</li><li>Post one comment on a violation after a test merge.</li><li>Get a service account with API access scoped to the applications in scope.</li></ol></div>
+        <div class="card purple"><h3>PoC scope</h3><ul><li>IQ Server checklist first. It sets the rest of the scope.</li><li>One pilot repository on Gitea, Maven only.</li><li>One called jar with a minor fix: full path with tests.</li><li>One not-called transitive jar: version override path.</li><li>One declared unused jar: removal path.</li><li>Measure tokens, job time, and reviewer time.</li></ul></div>
+      </div>
+    </div>
+  </details>
+
+  <footer>Written in ASD-STE100 style &middot; v3 &middot; Jenkins &middot; Sonatype IQ &middot; Pi agent + LLM &middot; Gitea &middot; Maven</footer>
+</main>
+
+<script>
+  function toggleAll(open) {
+    document.querySelectorAll('details.sec').forEach(function (d) { d.open = open; });
+  }
+  // Open the target section when a link in the index is used.
+  function openFromHash() {
+    var id = location.hash && location.hash.slice(1);
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (el && el.tagName === 'DETAILS') { el.open = true; }
+  }
+  window.addEventListener('hashchange', openFromHash);
+  openFromHash();
+</script>
+</body>
+</html>
